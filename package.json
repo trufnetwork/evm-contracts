@@ -1,8 +1,8 @@
 {
-  "name": "@trufnetwork/contracts",
+  "name": "@trufnetwork/evm-contracts",
   "version": "0.0.1",
   "private": true,
-  "description": "Truf Network contracts",
+  "description": "Truf Network EVM contracts",
   "scripts": {
     "run:direct": "deno run --no-prompt --allow-net deno-src/source.ts"
   },
