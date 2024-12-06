@@ -1,0 +1,45 @@
+# Ignore .env files, but allow .env.example
+.env*
+!.env.example
+
+.idea
+.build
+
+# directory `gitignore` to facilitate temporary files
+gitignore
+
+node_modules
+
+# we want to keep it flexible for different package managers
+pnpm-lock.yaml
+yarn.lock
+deno.lock
+package-lock.json
+
+# Hardhat files
+/cache
+/artifacts
+/ignition/deployments/**/build-info
+/typechain
+/typechain-types
+
+# Coverage directory used by tools like istanbul
+coverage
+coverage.json
+
+# Hardhat local network files
+/ignition/deployments/hardhat
+/ignition/deployments/localhost
+/ignition/deployments/chain-31337
+
+# Hardhat temporary files
+.openzeppelin
+
+# Build files
+dist/
+build/
+
+# Debug logs
+debug/
+logs/
+
