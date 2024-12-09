@@ -140,9 +140,9 @@ contract TNConsumerExample is FunctionsClient, ConfirmedOwner {
      * @return bytes32 The ID of the sent request
      */
     function requestTNData(
-        string memory dataProviderAddress,
-        string memory streamId, 
-        string memory date
+        string calldata dataProviderAddress,
+        string calldata streamId, 
+        string calldata date
     ) external onlyOwner returns (bytes32) {
         string[] memory args = new string[](3);
         args[0] = dataProviderAddress;
@@ -183,7 +183,7 @@ contract TNConsumerExample is FunctionsClient, ConfirmedOwner {
      * @notice Set the source code for the Chainlink Function
      * @param newSource Updated source code
      */
-    function setSource(string memory newSource) external onlyOwner {
+    function setSource(string calldata newSource) external onlyOwner {
         source = newSource;
         emit SourceUpdated(newSource);
     }
@@ -192,7 +192,7 @@ contract TNConsumerExample is FunctionsClient, ConfirmedOwner {
      * @notice Set the encrypted secrets URL
      * @param newEncryptedSecretsUrl The encrypted secrets URL
      */
-    function setEncryptedSecretsUrl(bytes memory newEncryptedSecretsUrl) external onlyOwner {
+    function setEncryptedSecretsUrl(bytes calldata newEncryptedSecretsUrl) external onlyOwner {
         encryptedSecretsUrl = newEncryptedSecretsUrl;
         emit EncryptedSecretsUrlUpdated();
     }
