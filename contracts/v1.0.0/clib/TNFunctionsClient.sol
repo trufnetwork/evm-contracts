@@ -5,12 +5,14 @@ import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/Fu
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import "./TNAccessControl.sol";
+import {IOracleCallback} from "../../IOracleCallback.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title TNFunctionsClient
  * @notice Base contract for managing Chainlink Functions source and request functionality
  */
-abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
+abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, ReentrancyGuard {
     using FunctionsRequest for FunctionsRequest.Request;
     using Strings for uint256;
 
@@ -27,6 +29,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
     struct PendingRequest {
         bool isPending;
         uint256 createdAt;
+        address caller;
     }
 
     mapping(bytes32 => PendingRequest) private pendingRequests;
@@ -45,6 +48,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
     event Response(bytes32 indexed requestId, bytes response, bytes err);
     event DecodedResponse(bytes32 indexed requestId, string date, int256 value);
     event StalePeriodUpdated(uint256 newStalePeriod);
+    event CallbackFailed(bytes32 indexed requestId, address indexed caller);
 
     // ======================= ENUMS =======================
     enum RequestType {
@@ -157,7 +161,8 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
 
         pendingRequests[requestId] = PendingRequest({
             isPending: true,
-            createdAt: block.timestamp
+            createdAt: block.timestamp,
+            caller: msg.sender
         });
 
         return requestId;
@@ -173,7 +178,8 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
 
         pendingRequests[requestId] = PendingRequest({
             isPending: true,
-            createdAt: block.timestamp
+            createdAt: block.timestamp,
+            caller: msg.sender
         });
 
         return requestId;
@@ -189,7 +195,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
         bytes32 requestId,
         bytes memory response,
         bytes memory err
-    ) internal virtual override {
+    ) internal virtual override nonReentrant {
         PendingRequest storage req = pendingRequests[requestId];
 
         if (!req.isPending) {
@@ -201,25 +207,32 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
             revert RequestTooStale(requestId, req.createdAt, block.timestamp);
         }
 
-        // Mark as fulfilled by removing from pending
+        // Get caller before deleting the request
+        address caller = req.caller;
+
+        // Delete request before external call
         delete pendingRequests[requestId];
 
         // Emit events with the response data
         emit Response(requestId, response, err);
 
-        if (response.length > 0) {
-            _handleResponse(requestId, response);
-        }
-    }
+        string memory date = "";
+        int256 value = 0;
 
-    /**
-     * @notice Internal function to handle and decode the response
-     * @param requestId The request ID
-     * @param response The response data to decode
-     */
-    function _handleResponse(bytes32 requestId, bytes memory response) internal virtual {
-        (string memory date, int256 value) = abi.decode(response, (string, int256));
-        emit DecodedResponse(requestId, date, value);
+        // Only decode response if there's no error
+        if (err.length == 0 && response.length > 0) {
+            (date, value) = abi.decode(response, (string, int256));
+            emit DecodedResponse(requestId, date, value);
+        }
+
+        // Make the callback to caller
+        try IOracleCallback(caller).receiveTNData(requestId, date, value, err) {
+            // Callback succeeded
+        } catch {
+            // Callback failed - we still consider the request fulfilled
+            // but we emit an event to log the failure
+            emit CallbackFailed(requestId, caller);
+        }
     }
 
     /**
