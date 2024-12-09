@@ -38,7 +38,7 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
      * @notice Set the encrypted secrets URL
      * @param newEncryptedSecretsUrl The new encrypted secrets URL to set
      */
-    function setEncryptedSecretsUrl(bytes memory newEncryptedSecretsUrl)
+    function setEncryptedSecretsUrl(bytes calldata newEncryptedSecretsUrl)
         external
         onlyRole(SECRETS_KEEPER_ROLE)
     {
@@ -79,9 +79,9 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
      */
     function requestRecord(
         uint8 decimalsMultiplier,
-        string memory dataProviderAddress,
-        string memory streamId,
-        string memory date
+        string calldata dataProviderAddress,
+        string calldata streamId,
+        string calldata date
     ) external onlyRole(READER_ROLE) whenNotPaused returns (bytes32) {
         string[] memory args = new string[](3);
         args[0] = dataProviderAddress;
@@ -102,11 +102,11 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
      */
     function requestIndex(
         uint8 decimalsMultiplier,
-        string memory dataProviderAddress,
-        string memory streamId,
-        string memory date,
-        string memory frozen_at, // string so it can be empty
-        string memory base_date
+        string calldata dataProviderAddress,
+        string calldata streamId,
+        string calldata date,
+        string calldata frozen_at, // string so it can be empty
+        string calldata base_date
     ) external onlyRole(READER_ROLE) whenNotPaused returns (bytes32) {
         string[] memory args = new string[](5);
         args[0] = dataProviderAddress;
@@ -130,12 +130,12 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
      */
     function requestIndexChange(
         uint8 decimalsMultiplier,
-        string memory dataProviderAddress,
-        string memory streamId,
-        string memory date,
-        string memory frozen_at, // string so it can be empty
-        string memory base_date,
-        string memory days_interval
+        string calldata dataProviderAddress,
+        string calldata streamId,
+        string calldata date,
+        string calldata frozen_at, // string so it can be empty
+        string calldata base_date,
+        string calldata days_interval
     ) external onlyRole(READER_ROLE) whenNotPaused returns (bytes32) {
         string[] memory args = new string[](6);
         args[0] = dataProviderAddress;

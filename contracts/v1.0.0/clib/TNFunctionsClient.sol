@@ -65,7 +65,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl {
      * @notice Set the URL where the source code for the Chainlink Function is hosted
      * @param newSourceUrl The URL pointing to the source code
      */
-    function setSourceUrl(string memory newSourceUrl)
+    function setSourceUrl(string calldata newSourceUrl)
         external
         onlyRole(SOURCE_KEEPER_ROLE)
     {
