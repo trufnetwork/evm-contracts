@@ -10,6 +10,7 @@
 import type { AxiosRequestConfig, AxiosInstance, AxiosResponse } from "npm:axios";
 import type { Decimal as DecimalType } from "npm:decimal.js-light@2.5.1"
 
+
 // Arguments passed to this script
 // 0: getRecord, 1: getIndex, 2: getIndexChange
 // args for getRecord: [requestType, decimalsMultiplier, dataProviderAddress, streamId, date]
@@ -43,10 +44,10 @@ const getIndexChangeTestArgs: string[] = [
   "365",
 ]
 
-const args = getIndexTestArgs
+const args = getRecordTestArgs
 
 const secrets = {
-  PRIVATE_KEY: "0x0000000000000000000000000000000000000000000000000000000000000001"
+  PRIVATE_KEY: "VALID_KEY_PLACEHOLDER"
 }
 
 const { FunctionsModule } = await import("npm:@chainlink/functions-toolkit/dist/simulateScript/Functions.js");
@@ -68,11 +69,11 @@ Deno.env.get = (prop) => {
 
 // ---------- IMPORTS ----------
 const { NodeTNClient, StreamId, EthereumAddress } = await import("npm:@trufnetwork/sdk-js@0.2.1");
-const { Wallet } = await import("npm:ethers");
-const { ethers } = await import("npm:ethers@6.10.0") // Import ethers.js v6.10.0
+const { ethers, Wallet } = await import("npm:ethers@6.10.0")
 const decimalPkg = await import("npm:decimal.js-light@2.5.1")
 // workaround to keep typescript happy
 const { default: Decimal } = decimalPkg  as unknown as { default: typeof DecimalType }
+const z = await import("npm:zod@3.22.4");
 
 // ---------- TYPES & ENUMS ----------
 /**
@@ -104,35 +105,86 @@ interface RecordRequestArgsObject extends BaseRequestArgsObject {
 }
 interface IndexRequestArgsObject extends BaseRequestArgsObject {
   requestType: RequestType.INDEX,
-  frozen_at: NonEmptyString | null,
+  frozen_at: number | null,
   base_date: NonEmptyString | null
 }
 interface IndexChangeRequestArgsObject extends BaseRequestArgsObject {
   requestType: RequestType.INDEX_CHANGE,
-  frozen_at: NonEmptyString | null,
+  frozen_at: number | null,
   base_date: NonEmptyString | null,
   days_interval: NonEmptyString
 }
 type RequestArgsObject = RecordRequestArgsObject | IndexRequestArgsObject | IndexChangeRequestArgsObject
 
+// Add schemas after the existing types & enums
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const ethereumAddressRegex = /^0x[a-fA-F0-9]{40}$/;
+
+// Base schema for common fields
+const baseArgsSchema = z.object({
+  requestType: z.enum(["0", "1", "2"]),
+  decimalsMultiplier: z.string()
+    .regex(/^\d+$/, "Must be a non-negative integer")
+    .transform(Number)
+    .refine(n => n >= 0 && n <= 100, "Decimals multiplier must be between 0 and 100"),
+  dataProviderAddress: z.string()
+    .regex(ethereumAddressRegex, "Invalid Ethereum address format"),
+  streamId: z.string()
+    .min(1, "Stream ID cannot be empty"),
+  date: z.string()
+    .regex(dateRegex, "Date must be in YYYY-MM-DD format")
+    .refine(date => !isNaN(new Date(date).getTime()), "Invalid date"),
+});
+
+// Record schema (type 0)
+const recordSchema = baseArgsSchema.extend({
+  requestType: z.literal("0"),
+}).strict();
+
+// Index schema (type 1)
+const indexSchema = baseArgsSchema.extend({
+  requestType: z.literal("1"),
+  frozen_at: z.string()
+    .regex(/^\d+$/, "frozen_at must be a positive integer (block height)")
+    .transform(Number)
+    .refine(n => n > 0, "frozen_at must be greater than 0")
+    .optional()
+    .nullable(),
+  base_date: z.string()
+    .regex(dateRegex, "base_date must be in YYYY-MM-DD format")
+    .refine(date => !isNaN(new Date(date).getTime()), "Invalid base_date")
+    .optional()
+    .nullable(),
+}).strict();
+
+// Index Change schema (type 2)
+const indexChangeSchema = baseArgsSchema.extend({
+  requestType: z.literal("2"),
+  frozen_at: z.string()
+    .regex(/^\d+$/, "frozen_at must be a positive integer (block height)")
+    .transform(Number)
+    .refine(n => n > 0, "frozen_at must be greater than 0")
+    .optional()
+    .nullable(),
+  base_date: z.string()
+    .regex(dateRegex, "base_date must be in YYYY-MM-DD format")
+    .refine(date => !isNaN(new Date(date).getTime()), "Invalid base_date")
+    .optional()
+    .nullable(),
+  days_interval: z.string()
+    .regex(/^\d+$/, "days_interval must be a positive integer")
+    .transform(Number)
+    .refine(n => n > 0, "days_interval must be greater than 0"),
+}).strict();
+
+// Combined schema using discriminated union
+const argsSchema = z.discriminatedUnion("requestType", [
+  recordSchema,
+  indexSchema,
+  indexChangeSchema,
+]);
+
 // ---------- HELPER FUNCTIONS ----------
-/**
- * Throws an error if the string is empty, otherwise returns the original string as NonEmptyString.
- */
-function nonEmptyString(value: string): NonEmptyString {
-  if (value.length === 0) {
-    throw new Error("String must be non-empty");
-  }
-  return value as NonEmptyString;
-}
-
-/**
- * Returns a NonEmptyString or null if input is empty.
- */
-function maybeEmptyString(value: string): NonEmptyString | null {
-  return value === "" ? null : nonEmptyString(value);
-}
-
 /**
  * Converts a string or null to a number or null.
  */
@@ -143,45 +195,93 @@ function numberOrNull(value: string | null): number | null {
 /**
  * Converts the raw arguments into a well-defined RequestArgsObject.
  */
-function requestArgsToObject(args: RequestArgs): RequestArgsObject {
-  const [requestType, decimalsMultiplier, dataProviderAddress, streamId, date, ...rest] = args;
+function requestArgsToObject(args: string[]): RequestArgsObject {
+  if (args.length < 5) {
+    throw new Error(`Insufficient arguments. Received ${args.length}, expected at least 5`);
+  }
 
-  // Base object
-  const base: BaseRequestArgsObject = {
+  const [requestType, decimalsMultiplier, dataProviderAddress, streamId, date, ...rest] = args;
+  
+  // Prepare the input object based on request type
+  const baseInput = {
     requestType,
-    dataProviderAddress: nonEmptyString(dataProviderAddress),
-    decimalsMultiplier: nonEmptyString(decimalsMultiplier), 
-    streamId: nonEmptyString(streamId),
-    date: nonEmptyString(date),
+    decimalsMultiplier,
+    dataProviderAddress,
+    streamId,
+    date,
   };
 
+  let input;
   switch (requestType) {
-    case RequestType.RECORD:
-      return { ...base, requestType: RequestType.RECORD };
-
-    case RequestType.INDEX: {
-      const [frozen_at = "", base_date = ""] = rest;
-      return {
-        ...base,
-        requestType: RequestType.INDEX,
-        frozen_at: maybeEmptyString(frozen_at),
-        base_date: maybeEmptyString(base_date),
+    case "0":
+      input = baseInput;
+      break;
+    case "1":
+      input = {
+        ...baseInput,
+        frozen_at: rest[0] || null,
+        base_date: rest[1] || null,
       };
-    }
-
-    case RequestType.INDEX_CHANGE: {
-      const [frozen_at = "", base_date = "", days_interval = ""] = rest;
-      return {
-        ...base,
-        requestType: RequestType.INDEX_CHANGE,
-        frozen_at: maybeEmptyString(frozen_at),
-        base_date: maybeEmptyString(base_date),
-        days_interval: nonEmptyString(days_interval),
+      break;
+    case "2":
+      input = {
+        ...baseInput,
+        frozen_at: rest[0] || null,
+        base_date: rest[1] || null,
+        days_interval: rest[2],
       };
-    }
-
+      break;
     default:
-      throw new Error(`Invalid request type: ${requestType}`)
+      throw new Error(`Invalid request type: ${requestType}`);
+  }
+
+  // Parse and validate using Zod
+  const result = argsSchema.safeParse(input);
+
+  
+  if (!result.success) {
+    const formattedError = result.error.issues
+      .map(issue => `${issue.path.join('.')}: ${issue.message}`)
+      .join('\n');
+    const ellipsis = formattedError.length > 100 ? "..." : "";
+    // we need to truncate, otherwise it just comes empty at response
+    throw new Error(`Validation failed:\n${formattedError.slice(0, 100)}${ellipsis}`);
+  }
+
+  // Convert the validated data back to the expected type
+  const validated = result.data;
+  
+  // Create base object with NonEmptyString types
+  const baseObject = {
+    dataProviderAddress: validated.dataProviderAddress as NonEmptyString,
+    decimalsMultiplier: validated.decimalsMultiplier.toString() as NonEmptyString,
+    streamId: validated.streamId as NonEmptyString,
+    date: validated.date as NonEmptyString,
+  };
+  
+  switch (validated.requestType) {
+    case "0":
+      return {
+        ...baseObject,
+        requestType: RequestType.RECORD,
+      };
+    
+    case "1":
+      return {
+        ...baseObject,
+        requestType: RequestType.INDEX,
+        frozen_at: validated.frozen_at || null,
+        base_date: validated.base_date ? (validated.base_date as NonEmptyString) : null,
+      };
+    
+    case "2":
+      return {
+        ...baseObject,
+        requestType: RequestType.INDEX_CHANGE,
+        frozen_at: validated.frozen_at || null,
+        base_date: validated.base_date ? (validated.base_date as NonEmptyString) : null,
+        days_interval: validated.days_interval.toString() as NonEmptyString,
+      };
   }
 }
 
@@ -255,7 +355,7 @@ async function getData(args: RequestArgsObject) {
       return await streams.getIndex({
         dateFrom: args.date,
         dateTo: args.date,
-        frozenAt: numberOrNull(args.frozen_at) ?? undefined,
+        frozenAt: args.frozen_at ?? undefined,
         baseDate: args.base_date ?? undefined,
       });
 
@@ -267,7 +367,7 @@ async function getData(args: RequestArgsObject) {
       return await streams.getIndexChange({
         dateFrom: args.date,
         dateTo: args.date,
-        frozenAt: numberOrNull(args.frozen_at) ?? undefined,
+        frozenAt: args.frozen_at ?? undefined,
         baseDate: args.base_date ?? undefined,
         daysInterval,
       });
@@ -276,6 +376,7 @@ async function getData(args: RequestArgsObject) {
 }
 
 // ---------- MAIN EXECUTION ----------
+
 const argsObject = requestArgsToObject(args as RequestArgs);
 
 let results;
