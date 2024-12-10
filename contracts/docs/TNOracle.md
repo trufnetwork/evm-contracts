@@ -95,3 +95,7 @@ For details on how data points are generated and updated — often resulting in 
 - Multiple simultaneous requests supported
 - Uses request mapping instead of single-value storage
 - Stale period prevents replay attacks
+
+### Testing and Coverage
+
+Refer to [TESTING.md](../../test/requestv1/TESTING.md) for an overview of our testing strategy, what is currently covered, and known limitations (such as the lack of coverage reporting due to incompatibilities with the local Chainlink Functions environment).

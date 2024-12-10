@@ -18,7 +18,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
 
     // ======================= CUSTOM ERRORS =======================
     error GasLimitTooHigh(uint32 provided, uint32 maxAllowed);
-    error IdenticalSourceUrl(string oldUrl, string newUrl);
+    error IdenticalSource(string oldSource, string newSource);
     error IdenticalDonId(bytes32 oldDonId, bytes32 newDonId);
     error IdenticalSubscriptionId(uint64 oldSubId, uint64 newSubId);
     error UnexpectedRequestID(bytes32 requestId, bytes32 lastRequestId);
@@ -37,16 +37,18 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     uint64 public subscriptionId;
     uint32 private gasLimit = 200000;
     uint32 public constant MAX_GAS_LIMIT = 500000;
-    string public sourceUrl;
+    string public source;
+    FunctionsRequest.Location public sourceLocation;
     uint256 public stalePeriod = 1 hours;
 
     // ======================= EVENTS =======================
     event GasLimitUpdated(uint32 newGasLimit);
-    event SourceUpdated(string newSource);
+    event SourceUpdated(string newSource, FunctionsRequest.Location location);
     event DonIdUpdated(bytes32 newDonId);
     event SubscriptionIdUpdated(uint64 newSubscriptionId);
     event Response(bytes32 indexed requestId, bytes response, bytes err);
     event DecodedResponse(bytes32 indexed requestId, string date, int256 value);
+    event DecodedResponseError(bytes32 indexed requestId, string error);
     event StalePeriodUpdated(uint256 newStalePeriod);
     event CallbackFailed(bytes32 indexed requestId, address indexed caller);
 
@@ -67,17 +69,21 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
 
     /**
      * @notice Set the URL where the source code for the Chainlink Function is hosted
-     * @param newSourceUrl The URL pointing to the source code
+     * @param newSource The source code
+     * @param location The location of the source code
      */
-    function setSourceUrl(string calldata newSourceUrl)
+    function setSource(string calldata newSource, FunctionsRequest.Location location)
         external
         onlyRole(SOURCE_KEEPER_ROLE)
     {
-        if (keccak256(bytes(newSourceUrl)) == keccak256(bytes(sourceUrl))) {
-            revert IdenticalSourceUrl(sourceUrl, newSourceUrl);
+        // checking the source is enough to mitigate
+        if (keccak256(bytes(newSource)) == keccak256(bytes(source))) {
+            revert IdenticalSource(source, newSource);
         }
-        sourceUrl = newSourceUrl;
-        emit SourceUpdated(newSourceUrl);
+        source = newSource;
+        sourceLocation = location;
+
+        emit SourceUpdated(newSource, location);
     }
 
     /**
@@ -146,9 +152,9 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     ) internal returns (bytes32 requestId) {
         FunctionsRequest.Request memory req;
         req.initializeRequest(
-            FunctionsRequest.Location.Remote,
+            sourceLocation,
             FunctionsRequest.CodeLanguage.JavaScript,
-            sourceUrl
+            source
         );
         if (encryptedSecretsUrls.length > 0) {
             req.addSecretsReference(encryptedSecretsUrls);
@@ -223,6 +229,8 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
         if (err.length == 0 && response.length > 0) {
             (date, value) = abi.decode(response, (string, int256));
             emit DecodedResponse(requestId, date, value);
+        } else {
+            emit DecodedResponseError(requestId, string(err));
         }
 
         // Make the callback to caller
