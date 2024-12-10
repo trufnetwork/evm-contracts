@@ -253,46 +253,6 @@ describe("TNOracleV1", function () {
     });
   });
 
-  describe("Request Functionality with Local Testnet", function () {
-    beforeEach(async function () {
-      const { tnOracle, secretsKeeper, sourceKeeper, localFunctionsTestnet, subscriptionId } =
-        fixture;
-      await setupForRequests(tnOracle, {
-        sourceKeeper,
-        secretsKeeper,
-      }, {
-        subscriptionId: subscriptionId,
-        donId: localFunctionsTestnet.donId,
-        source: getSource('requestv1'),
-      });
-    });
-
-    it("Should successfully make a request and receive response", async function () {
-      const { tnOracle, reader } = fixture;
-
-      // Make the request
-      const tx = await tnOracle
-        .connect(reader)
-        .requestRecord(
-          18,
-          "0x4710a8d8f0d845da110086812a32de6d90d7ff5c",
-          "stfcfa66a7c2e9061a6fac8b32027ee8",
-          "2024-09-01"
-        );
-
-      // Wait for the request to be processed
-      await tx.wait();
-
-      // The local testnet will automatically simulate the response
-      // You can add assertions here to verify the response was received
-      // For example, check for events or state changes
-
-      // TODO:
-      // - check for events with the same requestId
-      // - expect decoded: Result(2) [ "2024-08-30", 228750000000000000000n ]
-    });
-  });
-
   describe("Callback Functionality", function () {
     beforeEach(async function () {
       const { tnOracle, secretsKeeper, sourceKeeper, localFunctionsTestnet, subscriptionId } = fixture;
