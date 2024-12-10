@@ -4,11 +4,15 @@ import path from "node:path";
 import tsc from "typescript";
 
 export const SourceKeys = {
-    simpleExample: 'simpleExample'
+    simpleExample: 'simpleExample',
+    requestv1: 'requestv1'
 }
 
+export type SourceKey = keyof typeof SourceKeys;
+
 const SourceKeyFiles = {
-    simpleExample: 'simpleExample.ts'
+    simpleExample: 'simpleExample.ts',
+    requestv1: 'requestV1/source.ts'
 } satisfies Record<keyof typeof SourceKeys, string>;
 
 /**
