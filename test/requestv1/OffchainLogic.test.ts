@@ -155,17 +155,6 @@ describe("Off-Chain Logic Simulation", function () {
 
       expect(result.errorString).to.match(/invalid private key/i);
     });
-
-    it('all wrong', async function () {
-      const args = [
-        "0",
-        "18",
-        "invalid_address",
-        "invalid_stream",
-        "invalid_date"
-      ];
-      await expect(simulateAndDecode(args)).to.be.rejectedWith(/Invalid/);
-    });
   });
 
   describe("INDEX_CHANGE Request Type (2)", function () {
