@@ -1,10 +1,13 @@
-import { HardhatUserConfig, subtask } from "hardhat/config";
+import { subtask } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "dotenv/config";
-import "./tasks";
 import { join } from "path";
 import { writeFile } from "fs/promises";
 import { TASK_COMPILE_SOLIDITY } from "hardhat/builtin-tasks/task-names";
+import "@nomicfoundation/hardhat-chai-matchers";
+
+
+import './tasks'
 
 subtask(TASK_COMPILE_SOLIDITY).setAction(async (_, { config }, runSuper) => {
   const superRes = await runSuper();
@@ -40,23 +43,40 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 const ETHERSCAN_KEY = process.env.ETHERSCAN_API_KEY;
 
-const config: HardhatUserConfig = {
- solidity: "0.8.27",
- defaultNetwork: "hardhat",
- networks: {
-  sepolia: {
-    url: process.env.ETHEREUM_SEPOLIA_RPC_URL,
-    accounts: [PRIVATE_KEY!],
+/** @type import('hardhat/config').HardhatUserConfig */
+const config = {
+  solidity: {
+    version: "0.8.27",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200
+      },
+      viaIR: true
+    }
   },
- },
- etherscan: {
-   apiKey: ETHERSCAN_KEY,
- },
- typechain: {
-  outDir: "typechain-types",
-  target: "ethers-v6",
-  alwaysGenerateOverloads: true,
- },
+  defaultNetwork: "localhost",
+  networks: {
+    hardhat: {
+      chainId: 31337
+    },
+    localhost: {
+      url: "http://127.0.0.1:8545",
+      chainId: 1337
+    },
+    sepolia: {
+      url: process.env.ETHEREUM_SEPOLIA_RPC_URL,
+      accounts: [PRIVATE_KEY],
+    },
+  },
+  etherscan: {
+    apiKey: ETHERSCAN_KEY,
+  },
+  typechain: {
+    outDir: "typechain-types",
+    target: "ethers-v6",
+    alwaysGenerateOverloads: true,
+  },
 };
 
-export default config;
+export = config;
