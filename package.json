@@ -27,6 +27,7 @@
     "chai-as-promised": "7.1.2",
     "dotenv": "16.4.5",
     "hardhat": "2.22.16",
+    "hardhat-switch-network": "1.1.1",
     "mocha": "11.0.1",
     "prettier": "^3.3.3",
     "solidity-coverage": "^0.8.0",
