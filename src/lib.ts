@@ -27,6 +27,7 @@ export const ether5Signer = (signer: ethers.Signer): ethersv5.Signer => {
     call: (transaction: Deferrable<TransactionRequest>) => signer.call({ ...transaction } as TransactionRequest),
     getAddress: () => signer.getAddress(),
     signMessage: (message: string | ethers.BytesLike) => signer.signMessage(message),
+    sendTransaction: (transaction: Deferrable<TransactionRequest>) => signer.sendTransaction({ ...transaction } as TransactionRequest),
   } as ethersv5.Signer;
 }
 

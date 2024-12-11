@@ -16,7 +16,7 @@ const args = [
 ]
 
 const secrets = {
-  PRIVATE_KEY: "0x0000000000000000000000000000000000000000000000000000000000000001"
+  PRIVATE_KEY: "VALID_KEY_PLACEHOLDER"
 }
 
 const { FunctionsModule } = await import("npm:@chainlink/functions-toolkit/dist/simulateScript/Functions.js");
