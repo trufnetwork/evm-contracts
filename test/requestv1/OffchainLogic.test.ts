@@ -175,6 +175,90 @@ describe("Off-Chain Logic Simulation", function () {
       expect(value.toString()).to.match(/^\d+$/);
     });
 
+    it("Should handle days_interval = 1 in INDEX_CHANGE request", async function () {
+      const args = [
+        "2", // RequestType.INDEX_CHANGE
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "", // frozen_at
+        "", // base_date
+        "1" // minimum days_interval
+      ];
+
+      const [date, value] = await simulateAndDecode(args);
+      expect(date).to.be.a("string");
+      expect(value.toString()).to.match(/^\-?\d+$/);
+    });
+
+    it("Should handle large decimals multiplier", async function () {
+      const args = [
+        "2", // RequestType.INDEX_CHANGE
+        "50", // very large decimals
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "",
+        "",
+        "30"
+      ];
+
+      const [date, value] = await simulateAndDecode(args);
+      expect(date).to.be.a("string");
+      // Value should be much larger due to 36 decimals
+      expect(value.toString().length).to.be.greaterThan(36);
+    });
+
+    it("Should fail with negative days_interval", async function () {
+      const args = [
+        "2",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "",
+        "",
+        "-1" // negative days_interval
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/days_interval must be a positive integer/i);
+    });
+
+    it("Should fail with zero days_interval", async function () {
+      const args = [
+        "2",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "",
+        "",
+        "0" // zero days_interval
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Validation failed/i);
+    });
+
+    it("Should handle maximum allowed days_interval", async function () {
+      const args = [
+        "2",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "",
+        "",
+        "3650" // maximum reasonable interval
+      ];
+
+      const [date, value] = await simulateAndDecode(args);
+      expect(date).to.be.a("string");
+      expect(value.toString()).to.match(/^\d+$/);
+    });
+
     it("Should fail with invalid days_interval", async function () {
       const args = [
         "2",
