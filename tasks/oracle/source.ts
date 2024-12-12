@@ -20,7 +20,7 @@ task("oracle:setSourceInline", "Sets the source code for Chainlink Functions")
 task("oracle:setSourceRemote", "Sets the source code for Chainlink Functions")
   .addParam("contract", "The TNOracleV1 contract address")
   .addParam("url", "The URL of the source code")
-  .setAction(async ({ contract, url }, hre) => {ew
+  .setAction(async ({ contract, url }, hre) => {
     const tnOracle = await hre.ethers.getContractAt("TNOracleV1", contract) as TNOracleV1;
     const tx = await tnOracle.setSource(url, Location.Remote);
     console.log(`Source code set for ${url}, tx: ${tx.hash}`);
