@@ -4,6 +4,11 @@ pragma solidity ^0.8.27;
 import "../../IOracleCallback.sol";
 import "../TNOracleV1.sol";
 
+// Mock TNConsumer for testing
+// This is a simple mock implementation of the TNConsumer contract.
+// It is used to simulate the fulfillment of requests and the sending of requests.
+// It is not meant to be used in production.
+
 contract MockTNConsumer is IOracleCallback {
     TNOracleV1 public oracle;
     

@@ -3,6 +3,11 @@ pragma solidity ^0.8.19;
 
 import {IFunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/interfaces/IFunctionsClient.sol";
 
+// Mock Functions Router for testing
+// This is a simple mock implementation of the Functions Router contract.
+// It is used to simulate the fulfillment of requests and the sending of requests.
+// It is not meant to be used in production.
+
 contract MockFunctionsRouter {
     event RequestSimulated(bytes32 indexed id);
 
