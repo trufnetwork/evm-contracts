@@ -14,8 +14,8 @@ describe("Off-Chain Logic Simulation", function () {
   const source = getSource("requestv1");
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
-  // Helper function to simulate and decode response
-  async function simulateAndDecode(args: string[]) {
+  // Helper function to simulate
+  async function simulate(args: string[]) {
     const result = await simulateScript({
       source,
       args,
@@ -24,11 +24,15 @@ describe("Off-Chain Logic Simulation", function () {
       maxExecutionTimeMs: 10_000
     });
     
-    const error = result.errorString;
-    if (error) {
-      throw new Error(error);
+    if (result.errorString) {
+      throw new Error(result.errorString);
     }
-    
+    return result;
+  }
+
+  // Helper function to simulate and decode response
+  async function simulateAndDecode(args: string[]) {
+    const result = await simulate(args);
     assert.isDefined(result.responseBytesHexstring, "Response bytes hexstring is undefined");
     return abiCoder.decode(["string", "int256"], result.responseBytesHexstring);
   }
@@ -272,6 +276,203 @@ describe("Off-Chain Logic Simulation", function () {
       ];
 
       await expect(simulateAndDecode(args)).to.be.rejectedWith(/days_interval must be a positive integer/i);
+    });
+  });
+
+  describe("Argument Validation and Safety Tests", function () {
+    it("Should fail with invalid request type", async function () {
+      const args = [
+        "9999",  // invalid request type
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01"
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Invalid request type/i);
+    });
+
+    it("Should fail with negative decimals multiplier", async function () {
+      const args = [
+        "0",   // RECORD
+        "-1",  // invalid decimal multiplier
+        dataProviderAddress,
+        streamId,
+        "2024-09-01"
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/decimalsMultiplier: Must be a non-negative integer/i);
+    });
+
+    it("Should fail with excessively large decimals multiplier", async function () {
+      const args = [
+        "0",
+        "9999", // too large
+        dataProviderAddress,
+        streamId,
+        "2024-09-01"
+      ];
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/decimals multiplier must be between 0 and 100/i);
+    });
+
+    it("Should fail with malformed data provider address", async function () {
+      const args = [
+        "0",
+        "18",
+        "0x1234_NOTVALIDADDRESS",
+        streamId,
+        "2024-09-01"
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Invalid Ethereum address format/i);
+    });
+
+    it("Should fail with empty stream ID", async function () {
+      const args = [
+        "0",
+        "18",
+        dataProviderAddress,
+        "", // empty streamId
+        "2024-09-01"
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Stream ID cannot be empty/i);
+    });
+
+    it("Should fail with invalid date format", async function () {
+      const args = [
+        "0",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024/09/01" // incorrect format
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Date must be in YYYY-MM-DD format/i);
+    });
+
+    it("Should fail with nonexistent date", async function () {
+      const args = [
+        "0",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-13-01" // 13th month
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Invalid date/i);
+    });
+
+    it("Should fail with invalid frozen_at parameter", async function () {
+      const args = [
+        "1", // INDEX request
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "not_a_number", // invalid frozen_at
+        ""
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/frozen_at must be a positive integer/i);
+    });
+
+    it("Should fail with invalid base_date parameter", async function () {
+      const args = [
+        "1",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "123456",
+        "some_random_string" // invalid base_date
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/base_date must be in YYYY-MM-DD format/i);
+    });
+
+    it("Should fail with invalid days_interval parameter", async function () {
+      const args = [
+        "2", // INDEX_CHANGE
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "",
+        "",
+        "potato" // invalid days_interval
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/days_interval must be a positive integer/i);
+    });
+
+    it("Should fail with zero days_interval parameter", async function () {
+      const args = [
+        "2",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "2024-09-01",
+        "",
+        "",
+        "0" // zero is not allowed
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Validation failed/i);
+    });
+
+    it("Should fail with nonsense date", async function () {
+      const args = [
+        "0",
+        "18",
+        dataProviderAddress,
+        streamId,
+        "9999-99-99" // nonsense date
+      ];
+
+      await expect(simulateAndDecode(args))
+        .to.be.rejectedWith(/Invalid date/i)
+    });
+
+    it("Should not produce successful responses for malicious strings", async function () {
+      const badDataProvider = {
+        args: [
+          "0",
+          "18",
+          // attempt SQL injection. Although doesn't make sense, it's a placeholder for future malicious input
+          dataProviderAddress + "'; DROP TABLE postgres;--",
+          streamId,
+          "2024-09-01"
+        ],
+        error: /dataProviderAddress: Invalid Ethereum address format/i
+      };
+
+      const badStreamId = {
+        args: [
+          "0",
+          "18",
+          dataProviderAddress,
+          streamId + "'; DROP TABLE postgres;--",
+          "2024-09-01"
+        ],
+        error: /dataset not found/i
+      };
+
+      for (const args of [badDataProvider, badStreamId]) {
+        await expect(simulateAndDecode(args.args))
+          .to.be.rejectedWith(args.error);
+      }
     });
   });
 });

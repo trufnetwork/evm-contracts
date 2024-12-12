@@ -24,7 +24,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     error UnexpectedRequestID(bytes32 requestId, bytes32 lastRequestId);
     error RequestTooStale(bytes32 requestId, uint256 createdAt, uint256 currentTime);
     error RequestNotFound(bytes32 requestId);
-
+    error TooManyArgs(uint256 argsLength);
     // ======================= STATE VARIABLES =======================
     struct PendingRequest {
         bool isPending;
@@ -51,13 +51,6 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     event DecodedResponseError(bytes32 indexed requestId, string error);
     event StalePeriodUpdated(uint256 newStalePeriod);
     event CallbackFailed(bytes32 indexed requestId, address indexed caller);
-
-    // ======================= ENUMS =======================
-    enum RequestType {
-        RECORD,
-        INDEX,
-        INDEX_CHANGE
-    }
 
     // ======================= CONSTRUCTOR =======================
     constructor(address router)
@@ -245,54 +238,38 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
 
     /**
      * @notice Sends a Chainlink Functions request to fetch TN data
-     * @param requestType The type of data to fetch
+     * @param requestType The type of data to fetch (passed as uint8)
+     * @param decimalsMultiplier The multiplier for decimal precision
      * @param args Arguments for the request
-     * @param encryptedSecretsUrl The encrypted secrets URL to use
      * @return bytes32 The ID of the sent request
      */
     function requestTNData(
-        RequestType requestType,
+        uint8 requestType,
         uint8 decimalsMultiplier,
-        string[] memory args,
-        bytes memory encryptedSecretsUrl
-    ) internal virtual returns (bytes32) {
+        string[] memory args
+    ) external virtual returns (bytes32) {
         // we prepend the request type and decimals multiplier to the args
         string[] memory fnArgs = new string[](2 + args.length);
-        fnArgs[0] = requestTypeToString(requestType);
+        fnArgs[0] = Strings.toString(requestType);
         fnArgs[1] = Strings.toString(decimalsMultiplier);
+
+        // let's arbitrary limit the number of args to 20, just to be safe
+        if (args.length > 20) {
+            revert TooManyArgs(args.length);
+        }
 
         // copy the args
         for (uint8 i = 0; i < args.length; i++) {
             // start from 2 because we already prepended arguments
             fnArgs[2 + i] = args[i];
         }
-        bytes[] memory bytesArgs = new bytes[](0);
         bytes32 requestId = sendRequest(
             encryptedSecretsUrl,
             0, // no donHostedSecretsSlotID
             0, // no donHostedSecretsVersion
             fnArgs,
-            bytesArgs
+            new bytes[](0)
         );
         return requestId;
-    }
-
-    // ======================= UTILITY FUNCTIONS =======================
-
-    /**
-     * @dev Saves gas by converting a RequestType to a string, without using a library
-     *
-     * @notice Convert a RequestType to a string
-     * @param requestType The type of data to fetch
-     * @return string The string representation of the request type
-     */
-    function requestTypeToString(RequestType requestType) internal pure returns (string memory) {
-        if (requestType == RequestType.RECORD) {
-            return "0";
-        } else if (requestType == RequestType.INDEX) {
-            return "1";
-        } else {
-            return "2";
-        }
     }
 }

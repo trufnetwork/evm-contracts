@@ -29,6 +29,19 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
     // ======================= EVENTS =======================
     event EncryptedSecretsUrlUpdated();
 
+    // ======================= ENUMS =======================
+    /**
+     * @dev RequestType is used to specify the type of data to fetch.
+     * The requestTNData function from TNFunctionsClient can be called directly with custom 
+     * request types if the deployed source code supports them. The following enum values
+     * represent the standard request types, but are not exhaustive.
+     */
+    enum RequestType {
+        RECORD,
+        INDEX,
+        INDEX_CHANGE
+    }
+
     // ======================= CONSTRUCTOR =======================
     constructor(address router) TNFunctionsClient(router) {}
 
