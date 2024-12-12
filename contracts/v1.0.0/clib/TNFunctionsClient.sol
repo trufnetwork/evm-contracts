@@ -4,15 +4,15 @@ pragma solidity ^0.8.27;
 import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/FunctionsClient.sol";
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import "./TNAccessControl.sol";
+import {TNAccessControl} from "./TNAccessControl.sol";
 import {IOracleCallback} from "../../IOracleCallback.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 /**
  * @title TNFunctionsClient
  * @notice Base contract for managing Chainlink Functions source and request functionality
  */
-abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, ReentrancyGuard {
+abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, ReentrancyGuard, Pausable {
     using FunctionsRequest for FunctionsRequest.Request;
     using Strings for uint256;
 
@@ -25,6 +25,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     error RequestTooStale(bytes32 requestId, uint256 createdAt, uint256 currentTime);
     error RequestNotFound(bytes32 requestId);
     error TooManyArgs(uint256 argsLength);
+    error IdenticalEncryptedSecretsUrl();
     // ======================= STATE VARIABLES =======================
     struct PendingRequest {
         bool isPending;
@@ -40,6 +41,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     string public source;
     FunctionsRequest.Location public sourceLocation;
     uint256 public stalePeriod = 1 hours;
+    bytes public encryptedSecretsUrl;
 
     // ======================= EVENTS =======================
     event GasLimitUpdated(uint32 newGasLimit);
@@ -51,12 +53,29 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     event DecodedResponseError(bytes32 indexed requestId, string error);
     event StalePeriodUpdated(uint256 newStalePeriod);
     event CallbackFailed(bytes32 indexed requestId, address indexed caller);
+    event EncryptedSecretsUrlUpdated();
 
     // ======================= CONSTRUCTOR =======================
     constructor(address router)
         FunctionsClient(router)
         TNAccessControl(3 days, msg.sender)
     {}
+
+    // ========== PAUSE KEEPER FUNCTIONS ==========
+
+    /**
+     * @notice Pause the contract, disabling new requests
+     */
+    function pause() external onlyRole(PAUSE_KEEPER_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause the contract, enabling new requests
+     */
+    function unpause() external onlyRole(PAUSE_KEEPER_ROLE) {
+        _unpause();
+    }
 
     // ========== SOURCE KEEPER FUNCTIONS ==========
 
@@ -127,6 +146,26 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
         emit StalePeriodUpdated(newStalePeriod);
     }
 
+    // ========== SECRETS KEEPER FUNCTIONS ==========
+    /**
+     * @notice Set the encrypted secrets URL
+     * @param newEncryptedSecretsUrl The new encrypted secrets URL to set
+     */
+    function setEncryptedSecretsUrl(bytes calldata newEncryptedSecretsUrl)
+        external
+        onlyRole(SECRETS_KEEPER_ROLE)
+    {
+        // Optimization: short circuit if the length is the same
+        if (newEncryptedSecretsUrl.length == encryptedSecretsUrl.length) {
+            if (keccak256(newEncryptedSecretsUrl) == keccak256(encryptedSecretsUrl)) {
+                revert IdenticalEncryptedSecretsUrl();
+            }
+        }
+        encryptedSecretsUrl = newEncryptedSecretsUrl;
+        emit EncryptedSecretsUrlUpdated();
+    }
+
+    // ========== REQUEST FUNCTIONS ==========
     /**
      * @notice Send a simple request
      * @param encryptedSecretsUrls Encrypted URLs where to fetch user secrets
@@ -247,7 +286,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
         uint8 requestType,
         uint8 decimalsMultiplier,
         string[] memory args
-    ) external virtual returns (bytes32) {
+    ) public virtual returns (bytes32) {
         // we prepend the request type and decimals multiplier to the args
         string[] memory fnArgs = new string[](2 + args.length);
         fnArgs[0] = Strings.toString(requestType);

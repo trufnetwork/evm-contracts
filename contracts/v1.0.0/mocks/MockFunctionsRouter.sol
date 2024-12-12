@@ -29,6 +29,8 @@ contract MockFunctionsRouter {
     ) external returns (bytes32) {
         bytes32 requestId = keccak256(abi.encodePacked(subscriptionId, data, block.timestamp));
         emit RequestSimulated(requestId);
+        // just silence the error about unused variables
+        (subscriptionId, data, dataVersion, callbackGasLimit, donId);
         return requestId;
     }
 } 

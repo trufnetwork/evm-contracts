@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
-import "./clib/TNFunctionsClient.sol";
+import {TNFunctionsClient} from "./clib/TNFunctionsClient.sol";
 import { ITNOracleV1 } from "./ITNOracleV1.sol";
 
 /**
@@ -19,16 +17,7 @@ import { ITNOracleV1 } from "./ITNOracleV1.sol";
  *
  * This contract may be paused. Pausing means that the contract will not be able to send any new requests.
  */
-contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
-    // ======================= CUSTOM ERRORS =======================
-    error IdenticalEncryptedSecretsUrl();
-
-    // ======================= STATE VARIABLES =======================
-    bytes public encryptedSecretsUrl;
-
-    // ======================= EVENTS =======================
-    event EncryptedSecretsUrlUpdated();
-
+contract TNOracleV1 is TNFunctionsClient, ITNOracleV1 {
     // ======================= ENUMS =======================
     /**
      * @dev RequestType is used to specify the type of data to fetch.
@@ -45,41 +34,7 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
     // ======================= CONSTRUCTOR =======================
     constructor(address router) TNFunctionsClient(router) {}
 
-    // ========== SECRETS KEEPER FUNCTIONS ==========
 
-    /**
-     * @notice Set the encrypted secrets URL
-     * @param newEncryptedSecretsUrl The new encrypted secrets URL to set
-     */
-    function setEncryptedSecretsUrl(bytes calldata newEncryptedSecretsUrl)
-        external
-        onlyRole(SECRETS_KEEPER_ROLE)
-    {
-        // Optimization: short circuit if the length is the same
-        if (newEncryptedSecretsUrl.length == encryptedSecretsUrl.length) {
-            if (keccak256(newEncryptedSecretsUrl) == keccak256(encryptedSecretsUrl)) {
-                revert IdenticalEncryptedSecretsUrl();
-            }
-        }
-        encryptedSecretsUrl = newEncryptedSecretsUrl;
-        emit EncryptedSecretsUrlUpdated();
-    }
-
-    // ========== PAUSE KEEPER FUNCTIONS ==========
-
-    /**
-     * @notice Pause the contract, disabling new requests
-     */
-    function pause() external onlyRole(PAUSE_KEEPER_ROLE) {
-        _pause();
-    }
-
-    /**
-     * @notice Unpause the contract, enabling new requests
-     */
-    function unpause() external onlyRole(PAUSE_KEEPER_ROLE) {
-        _unpause();
-    }
 
     // ========== READER FUNCTIONS ==========
     /**
@@ -100,7 +55,7 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
         args[0] = dataProviderAddress;
         args[1] = streamId;
         args[2] = date;
-        return requestTNData(RequestType.RECORD, decimalsMultiplier, args, encryptedSecretsUrl);
+        return requestTNData(uint8(RequestType.RECORD), decimalsMultiplier, args);
     }
 
     /**
@@ -127,7 +82,7 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
         args[2] = date;
         args[3] = frozen_at;
         args[4] = base_date;
-        return requestTNData(RequestType.INDEX, decimalsMultiplier, args, encryptedSecretsUrl);
+        return requestTNData(uint8(RequestType.INDEX), decimalsMultiplier, args);
     }
 
     /**
@@ -146,7 +101,7 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
         string calldata dataProviderAddress,
         string calldata streamId,
         string calldata date,
-        string calldata frozen_at, // string so it can be empty
+        string calldata frozen_at,
         string calldata base_date,
         string calldata days_interval
     ) external onlyRole(READER_ROLE) whenNotPaused returns (bytes32) {
@@ -157,6 +112,6 @@ contract TNOracleV1 is TNFunctionsClient, Pausable, ITNOracleV1 {
         args[3] = frozen_at;
         args[4] = base_date;
         args[5] = days_interval;
-        return requestTNData(RequestType.INDEX_CHANGE, decimalsMultiplier, args, encryptedSecretsUrl);
+        return requestTNData(uint8(RequestType.INDEX_CHANGE), decimalsMultiplier, args);
     }
 }
