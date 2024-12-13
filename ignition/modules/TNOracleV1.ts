@@ -1,6 +1,6 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-export default buildModule("TSNOracleV1", (m) => {
+export default buildModule("TNOracleV1", (m) => {
   const routerAddress = m.getParameter("routerAddress");
   const stalePeriod = m.getParameter("stalePeriod", 3600n); // 1 hour
 
@@ -15,14 +15,17 @@ export default buildModule("TSNOracleV1", (m) => {
 
   const deployer = m.getAccount(0);
 
-  // Grant all roles to the deployer
-  m.call(tnOracle, "grantRole", [sourceKeeperRole, deployer]);
-  m.call(tnOracle, "grantRole", [secretsKeeperRole, deployer]);
-  m.call(tnOracle, "grantRole", [pauseKeeperRole, deployer]);
-  m.call(tnOracle, "grantRole", [whitelistKeeperRole, deployer]);
+  // Grant roles to the deployer
+  const sourceKeeperGrant = m.call(tnOracle, "grantRole", [sourceKeeperRole, deployer], { id: "grant_source_keeper_role" });
+  m.call(tnOracle, "grantRole", [secretsKeeperRole, deployer], { id: "grant_secrets_keeper_role" });
+  m.call(tnOracle, "grantRole", [pauseKeeperRole, deployer], { id: "grant_pause_keeper_role" });
+  m.call(tnOracle, "grantRole", [whitelistKeeperRole, deployer], { id: "grant_whitelist_keeper_role" });
 
-  // Set initial configuration parameters using contract calls
-  m.call(tnOracle, "setStalePeriod", [Number(stalePeriod)]);
+  // Set initial configuration parameters AFTER roles are granted
+  m.call(tnOracle, "setStalePeriod", [stalePeriod], { 
+    id: "set_stale_period",
+    after: [sourceKeeperGrant]
+  });
 
   return { tnOracle };
 });

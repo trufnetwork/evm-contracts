@@ -36,7 +36,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     mapping(bytes32 => PendingRequest) private pendingRequests;
     bytes32 public donID;
     uint64 public subscriptionId;
-    uint32 private gasLimit = 200000;
+    uint32 private gasLimit = 300000;
     uint32 public constant MAX_GAS_LIMIT = 500000;
     string public source;
     FunctionsRequest.Location public sourceLocation;
@@ -246,7 +246,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
         }
 
         // Get caller before deleting the request
-        address caller = req.caller;
+        address callerAddr = req.caller;
 
         // Delete request before external call
         delete pendingRequests[requestId];
@@ -265,13 +265,20 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
             emit DecodedResponseError(requestId, string(err));
         }
 
-        // Make the callback to caller
-        try IOracleCallback(caller).receiveTNData(requestId, date, value, err) {
-            // Callback succeeded
-        } catch {
-            // Callback failed - we still consider the request fulfilled
-            // but we emit an event to log the failure
-            emit CallbackFailed(requestId, caller);
+        // Check if the caller is a contract before attempting callback
+        uint256 size;
+        assembly {
+            size := extcodesize(callerAddr)
+        }
+        
+        if (size > 0) {
+            try IOracleCallback(callerAddr).receiveTNData(requestId, date, value, err) {
+                // Callback succeeded
+            } catch {
+                // Callback failed - we still consider the request fulfilled
+                // but we emit an event to log the failure
+                emit CallbackFailed(requestId, callerAddr);
+            }
         }
     }
 
