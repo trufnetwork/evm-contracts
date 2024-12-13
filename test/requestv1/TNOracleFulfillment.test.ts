@@ -145,22 +145,23 @@ describe("TNOracle Fulfillment", function () {
             const requestId = getRequestIdFromReceipt(receipt, mockRouter);
 
             // Mock error response
-            const errorMessage = "Test error message";
-            const errorResponse = ethers.toUtf8Bytes(errorMessage);
+            const errorMessageHexString = "0x496e76616c696420636f6465206c6f636174696f6e"
+            const errorMessage = ethers.toUtf8String(errorMessageHexString);
+
 
             // Simulate error fulfillment
             await (mockRouter as any).mockFulfill(
                 await tnOracle.getAddress(),
                 requestId,
                 "0x",
-                errorResponse
+                errorMessageHexString
             );
 
             // Verify consumer received error
             expect(await mockConsumer.lastRequestId()).to.equal(requestId);
             expect(await mockConsumer.lastDate()).to.equal("");
             expect(await mockConsumer.lastValue()).to.equal(0);
-            expect(ethers.toUtf8String(await mockConsumer.lastError())).to.equal(errorMessage);
+            expect(ethers.toUtf8String(await mockConsumer.lastError())).to.equal("Invalid code location");
         });
 
         it("Should handle stale request fulfillment", async function () {
@@ -257,5 +258,45 @@ describe("TNOracle Fulfillment", function () {
             expect(await mockConsumer.lastValue()).to.equal(100n);
             expect(await mockConsumer.lastError()).to.equal("0x");
         });
+
+        it("Should handle fulfillment when requester is not a contract", async function () {
+            // Grant READER_ROLE to a non-contract address (EOA)
+            await tnOracle.connect(whitelistKeeper).grantRole(
+                await tnOracle.READER_ROLE(),
+                nonRouter.address
+            );
+
+            // Make request directly from EOA
+            const tx = await tnOracle.connect(nonRouter).requestRecord(
+                18,
+                TEST_CONSTANTS.PROVIDER,
+                TEST_CONSTANTS.STREAM,
+                TEST_CONSTANTS.DATE
+            );
+            const receipt = await tx.wait();
+            const requestId = getRequestIdFromReceipt(receipt, mockRouter);
+
+            // Prepare mock response
+            const response = ethers.AbiCoder.defaultAbiCoder().encode(
+                ["string", "int256"],
+                [TEST_CONSTANTS.MOCK_RESPONSE.DATE, TEST_CONSTANTS.MOCK_RESPONSE.VALUE]
+            );
+
+            // Fulfill request
+            await expect(
+                (mockRouter as any).mockFulfill(
+                    await tnOracle.getAddress(),
+                    requestId,
+                    response,
+                    "0x"
+                )
+            ).to.emit(tnOracle, "Response")
+              .withArgs(requestId, response, "0x")
+              .and.to.emit(tnOracle, "DecodedResponse")
+              .withArgs(requestId, TEST_CONSTANTS.MOCK_RESPONSE.DATE, TEST_CONSTANTS.MOCK_RESPONSE.VALUE);
+
+            // No callback events should be emitted since requester is not a contract
+            // The fulfillment should still succeed
+        })
     });
 }); 
