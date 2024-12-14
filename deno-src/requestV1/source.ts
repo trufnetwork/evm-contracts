@@ -1,6 +1,7 @@
-// This file exists for:
-// - Testing via Deno directly (faster iteration)
-// - Using as source for the Chainlink Functions SDK
+// NOTE: This file is designed to be executed as a Chainlink Function inline source or loaded remotely via our "remote loader" script.
+// But it may also be used as a standalone script, for testing purposes.
+// Before deployment, some parts of this file are changed to match expected environment.
+
 
 // -------- TEST SETUP --------
 //
