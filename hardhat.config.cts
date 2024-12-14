@@ -56,7 +56,7 @@ const config = {
       viaIR: true
     }
   },
-  defaultNetwork: "chainlinkLocalhost",
+  defaultNetwork: "hardhat",
   networks: {
     hardhat: {
       chainId: 31337
