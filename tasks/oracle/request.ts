@@ -1,3 +1,4 @@
+import { ConfigurableScopeDefinition } from "hardhat/types";
 import { task } from "hardhat/config";
 import { TNOracleV1, TNOracleV1__factory } from "../../typechain-types";
 import { getRequestId } from "../../src/lib";
@@ -274,85 +275,90 @@ async function performRequest({
 
 // ------------ Task Definitions ------------
 
-task("oracle:requestRecord", "Request a record from TN")
-  .addParam("contract", "The TNOracleV1 contract address")
-  .addParam("decimals", "The decimals multiplier", "18")
-  .addParam("provider", "The data provider address")
-  .addParam("stream", "The stream ID")
-  .addParam("date", "The date to fetch data for (YYYY-MM-DD)")
-  .setAction(async (params: BaseRequestParams, hre) => {
-    validateBaseRequestParams(params);
-    const { tnOracle, contractInterface } = await initializeOracle(params.contract, hre);
+export const registerRequestTasks = (scope: ConfigurableScopeDefinition) => {
+  scope
+    .task("requestRecord", "Request a record from TN")
+    .addParam("contract", "The TNOracleV1 contract address")
+    .addParam("decimals", "The decimals multiplier", "18")
+    .addParam("provider", "The data provider address")
+    .addParam("stream", "The stream ID")
+    .addParam("date", "The date to fetch data for (YYYY-MM-DD)")
+    .setAction(async (params: BaseRequestParams, hre) => {
+      validateBaseRequestParams(params);
+      const { tnOracle, contractInterface } = await initializeOracle(params.contract, hre);
 
-    return performRequest({
-      hre,
-      requestName: `record for ${params.date}`,
-      requestFn: () => tnOracle.requestRecord(
-        parseInt(params.decimals),
-        params.provider,
-        params.stream,
-        params.date
-      ),
-      contractInterface
-    });
-  });
-
-  task("oracle:requestIndex", "Request an index from TN")
-  .addParam("contract", "The TNOracleV1 contract address")
-  .addParam("decimals", "The decimals multiplier", "18")
-  .addParam("provider", "The data provider address")
-  .addParam("stream", "The stream ID")
-  .addParam("date", "The date to fetch data for (YYYY-MM-DD)")
-  .addOptionalParam("frozenAt", "The frozen at block number (optional)", "")
-  .addOptionalParam("baseDate", "The base date (YYYY-MM-DD)", "")
-  .setAction(async (params: IndexRequestParams, hre) => {
-    validateBaseRequestParams(params);
-    const { tnOracle, contractInterface } = await initializeOracle(params.contract, hre);
-    const signer = await hre.ethers.provider.getSigner();
-    await checkAccess(tnOracle, signer);
-
-    await performRequest(
-      { 
+      return performRequest({
         hre,
-        requestName: `index for ${params.date}`,
-        requestFn: () => tnOracle.requestIndex(
-          BigInt(params.decimals),
-          params.provider,
-          params.stream,
-          params.date,
-          params.frozenAt,
-          params.baseDate
-        ),
-        contractInterface,
-      });
-  });
-
-task("oracle:requestIndexChange", "Request an index change from TN")
-  .addParam("contract", "The TNOracleV1 contract address")
-  .addParam("decimals", "The decimals multiplier", "18")
-  .addParam("provider", "The data provider address")
-  .addParam("stream", "The stream ID")
-  .addParam("date", "The date to fetch data for (YYYY-MM-DD)")
-  .addOptionalParam("frozenAt", "The frozen at block number (optional)", "")
-  .addOptionalParam("baseDate", "The base date (YYYY-MM-DD) (optional)", "")
-  .addParam("daysInterval", "The days interval")
-  .setAction(async (params: IndexChangeRequestParams, hre) => {
-    validateBaseRequestParams(params);
-    const { tnOracle, contractInterface } = await initializeOracle(params.contract, hre);
-
-    await performRequest(
-      {
-        hre,
-        requestName: `index change for ${params.date}`,
-        requestFn: () => tnOracle.requestIndexChange(
+        requestName: `record for ${params.date}`,
+        requestFn: () => tnOracle.requestRecord(
           parseInt(params.decimals),
           params.provider,
           params.stream,
-          params.date,
-          params.frozenAt,
-          params.baseDate,
-          params.daysInterval
+          params.date
         ),
-        contractInterface,
+        contractInterface
       });
-  });
+    });
+
+  scope
+    .task("requestIndex", "Request an index from TN")
+    .addParam("contract", "The TNOracleV1 contract address")
+    .addParam("decimals", "The decimals multiplier", "18")
+    .addParam("provider", "The data provider address")
+    .addParam("stream", "The stream ID")
+    .addParam("date", "The date to fetch data for (YYYY-MM-DD)")
+    .addOptionalParam("frozenAt", "The frozen at block number (optional)", "")
+    .addOptionalParam("baseDate", "The base date (YYYY-MM-DD)", "")
+    .setAction(async (params: IndexRequestParams, hre) => {
+      validateBaseRequestParams(params);
+      const { tnOracle, contractInterface } = await initializeOracle(params.contract, hre);
+      const signer = await hre.ethers.provider.getSigner();
+      await checkAccess(tnOracle, signer);
+
+      await performRequest(
+        { 
+          hre,
+          requestName: `index for ${params.date}`,
+          requestFn: () => tnOracle.requestIndex(
+            BigInt(params.decimals),
+            params.provider,
+            params.stream,
+            params.date,
+            params.frozenAt,
+            params.baseDate
+          ),
+          contractInterface,
+        });
+    });
+
+  scope
+    .task("requestIndexChange", "Request an index change from TN")
+    .addParam("contract", "The TNOracleV1 contract address")
+    .addParam("decimals", "The decimals multiplier", "18")
+    .addParam("provider", "The data provider address")
+    .addParam("stream", "The stream ID")
+    .addParam("date", "The date to fetch data for (YYYY-MM-DD)")
+    .addOptionalParam("frozenAt", "The frozen at block number (optional)", "")
+    .addOptionalParam("baseDate", "The base date (YYYY-MM-DD) (optional)", "")
+    .addParam("daysInterval", "The days interval")
+    .setAction(async (params: IndexChangeRequestParams, hre) => {
+      validateBaseRequestParams(params);
+      const { tnOracle, contractInterface } = await initializeOracle(params.contract, hre);
+
+      await performRequest(
+        {
+          hre,
+          requestName: `index change for ${params.date}`,
+          requestFn: () => tnOracle.requestIndexChange(
+            parseInt(params.decimals),
+            params.provider,
+            params.stream,
+            params.date,
+            params.frozenAt,
+            params.baseDate,
+            params.daysInterval
+          ),
+          contractInterface,
+        });
+    });
+};
