@@ -1,5 +1,4 @@
 import { Location } from "@chainlink/functions-toolkit";
-import { types } from "hardhat/config";
 import { ConfigurableScopeDefinition } from "hardhat/types";
 import { EnumArgumentType } from "../../src/EnumArgumentType";
 import { getLoadableSource, getRemoteLoaderSource, getSource, SourceKeys } from "../../src/getSource";

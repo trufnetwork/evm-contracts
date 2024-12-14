@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre, { ethers } from "hardhat";
-import { getSource } from "../../src/getSource";
+import { getLoadableSource, getRemoteLoaderSource, getSource } from "../../src/getSource";
 import { expectNotToBeReverted, expectRevertedWithCustomError } from "../helpers/errors";
 import { deployFixture, type Fixture } from "../helpers/fixtures";
 import { TEST_CONSTANTS } from "../helpers/constants";
@@ -365,6 +365,8 @@ describe("TNOracleV1", function () {
 
     });
 
+    // url to test proxy: https://gist.githubusercontent.com/outerlook/5a9ceff88a669cf763ec0109a1bacd04/raw
+
     it("Should emit DataReceived event with correct values", async function () {
       const { mockConsumer } = fixture;
 
@@ -417,6 +419,47 @@ describe("TNOracleV1", function () {
       const lastError = await mockConsumer.lastError();
       const lastErrorString = ethers.toUtf8String(lastError);
       expect(lastErrorString).to.match(/Invalid Ethereum address format/);
+    });
+
+    it("Should successfully make a request and receive callback with result using proxy source", async function () {
+      const { mockConsumer, tnOracle, sourceKeeper } = fixture;
+
+      // Set the proxy source using the URL from the comment
+      const remoteCodeUrl = "https://gist.githubusercontent.com/outerlook/5a9ceff88a669cf763ec0109a1bacd04/raw";
+      
+      const {importStatements} = await getLoadableSource('requestv1');
+      const proxySource = getRemoteLoaderSource(remoteCodeUrl, importStatements);
+
+      // Use setSource with Location.Inline to set the proxy source on the contract
+      await tnOracle.connect(sourceKeeper).setSource(proxySource, Location.Inline);
+
+      // Make request through mock consumer
+      const tx = await mockConsumer.requestRecord(
+        18,
+        "0x4710a8d8f0d845da110086812a32de6d90d7ff5c",
+        "stfcfa66a7c2e9061a6fac8b32027ee8",
+        "2024-09-01"
+      );
+
+      const dataReceivedPromise = new Promise(resolve => mockConsumer.once(mockConsumer.filters.DataReceived(), (event) => resolve(event)));
+
+      // Wait for transaction
+      await tx.wait();
+      await dataReceivedPromise;
+
+      // Check the stored values in mock consumer
+      const lastRequestId = await mockConsumer.lastRequestId();
+      expect(lastRequestId).to.not.equal(ethers.ZeroHash);
+
+      const lastError = await mockConsumer.lastError();
+      const lastErrorString = ethers.toUtf8String(lastError);
+      expect(lastErrorString).to.equal("");
+
+      const lastDate = await mockConsumer.lastDate();
+      expect(lastDate).to.equal("2024-08-30");
+
+      const lastValue = await mockConsumer.lastValue();
+      expect(lastValue).to.equal(228750000000000000000n);
     });
   });
 
