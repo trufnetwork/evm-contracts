@@ -4,11 +4,48 @@
 
 ### Deployment & Configuration
 
-1. Deploy contract with `initialAdmin`
-2. Set all required roles
-3. Configure initial parameters (URLs, DON ID, etc.)
-4. Test functionality thoroughly
-5. Lock down configuration by renouncing roles
+1. Deploy contract using hardhat ignition and set roles.
+  ```bash
+  # example for sepolia
+  pnpm hardhat ignition deploy ignition/modules/TNOracleV1.ts --parameters ignition/sepolia_parameters.json --network sepolia --verify
+  ```
+2. Configure parameters (URLs, DON ID, etc.)
+  ```bash
+  contract=<contract-address>
+  network=sepolia
+  url=
+  proxyUrl=
+  secretsUrl=
+  myAddress=
+  subscriptionId=
+  donId=
+
+  pnpm hardhat oracle grantReader --contract $contract --network $network --address $myAddress
+  pnpm hardhat oracle setGasLimit --contract $contract --network $network --gas-limit 300000
+  pnpm hardhat oracle setDonId --contract $contract --network $network --don-id $donId
+  pnpm hardhat oracle setSubscriptionId --contract $contract --network $network --sub-id $subscriptionId
+  pnpm hardhat oracle setSecretsUrl --url $secretsUrl --contract $contract --network $network
+  ```
+3. Build the source code and deploy it. See [Remote Code Integration](#remote-code-integration) for more details.
+  ```
+  pnpm hardhat build-source --source requestv1
+  # or
+  pnpm hardhat build-loadable-source --source simpleExample
+  ```
+4. Upload the source code to a remote URL (e.g. Github Secret Gist, IPFS, etc.)
+5. Set the source code
+  ```
+  pnpm hardhat oracle setSource --url $url --contract $contract --network $network
+  # or 
+  pnpm hardhat oracle setSourceInline --source requestv1 --contract $contract --network $network
+  # or
+  pnpm hardhat oracle setProxySource --contract $contract --network $network --url $proxyUrl
+  ```
+6. Test functionality thoroughly
+  ```
+  pnpm hardhat oracle requestIndex --contract $contract --network $network --decimals 2 --provider <contract> --stream <stream> --date 2024-09-01
+  ```
+7. Lock down configuration by renouncing roles as needed
 
 ### Upgradability
 
@@ -75,7 +112,7 @@ All roles can be granted/revoked by `DEFAULT_ADMIN_ROLE`. All roles can self-ren
 
 Uses Chainlink Functions for data delivery:
 1. Request initiated via function call
-2. Result delivered via callback
+2. Result delivered via callback, which can call back to the caller contract
 3. Secrets encrypted by Subscription Owner
 4. Encrypted secrets only valid for associated subscription ID
 
@@ -99,3 +136,21 @@ For details on how data points are generated and updated — often resulting in 
 ### Testing and Coverage
 
 Refer to [TESTING.md](../../test/requestv1/TESTING.md) for an overview of our testing strategy, what is currently covered, and known limitations (such as the lack of coverage reporting due to incompatibilities with the local Chainlink Functions environment).
+
+## External Contracts Usage
+
+See [Developer Guide](../../docs/DeveloperGuide.md) for more details on how to use external contracts, including directly interacting with TNOracle using your Externally Owned Account (EOA).
+
+### Remote Code Integration
+
+Chainlink Functions supports supplying source code from a remote location, reducing on-chain storage costs. However, we’ve encountered issues using this feature directly: pointing `setSource` to a hosted file often results in “Invalid code location” errors on public testnets.
+
+**Our Workaround:**  
+We introduce a small "Remote Loader" script that you inline into the contract. This loader, when executed by Chainlink Functions, retrieves the main logic from a reliable hosted URL. Since the loader is minimal, it keeps deployment costs low, and because it fetches the real code at runtime, we avoid the known remote loading errors.
+
+**Benefits:**  
+- Significantly less gas than inlining all logic.  
+- Avoids the “Invalid code location” issue.  
+- Maintains flexibility: update the remote code without heavy redeployments.
+
+In short, the Remote Loader acts as a stable bridge between Chainlink Functions and your external logic, enabling remote code usage today despite current limitations.
