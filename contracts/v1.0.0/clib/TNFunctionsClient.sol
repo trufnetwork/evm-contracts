@@ -4,15 +4,15 @@ pragma solidity ^0.8.27;
 import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/FunctionsClient.sol";
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import "./TNAccessControl.sol";
+import {TNAccessControl} from "./TNAccessControl.sol";
 import {IOracleCallback} from "../../IOracleCallback.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 /**
  * @title TNFunctionsClient
  * @notice Base contract for managing Chainlink Functions source and request functionality
  */
-abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, ReentrancyGuard {
+abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, ReentrancyGuard, Pausable {
     using FunctionsRequest for FunctionsRequest.Request;
     using Strings for uint256;
 
@@ -24,7 +24,8 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     error UnexpectedRequestID(bytes32 requestId, bytes32 lastRequestId);
     error RequestTooStale(bytes32 requestId, uint256 createdAt, uint256 currentTime);
     error RequestNotFound(bytes32 requestId);
-
+    error TooManyArgs(uint256 argsLength);
+    error IdenticalEncryptedSecretsUrl();
     // ======================= STATE VARIABLES =======================
     struct PendingRequest {
         bool isPending;
@@ -35,11 +36,12 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     mapping(bytes32 => PendingRequest) private pendingRequests;
     bytes32 public donID;
     uint64 public subscriptionId;
-    uint32 private gasLimit = 200000;
+    uint32 private gasLimit = 300000;
     uint32 public constant MAX_GAS_LIMIT = 500000;
     string public source;
     FunctionsRequest.Location public sourceLocation;
     uint256 public stalePeriod = 1 hours;
+    bytes public encryptedSecretsUrl;
 
     // ======================= EVENTS =======================
     event GasLimitUpdated(uint32 newGasLimit);
@@ -51,19 +53,29 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
     event DecodedResponseError(bytes32 indexed requestId, string error);
     event StalePeriodUpdated(uint256 newStalePeriod);
     event CallbackFailed(bytes32 indexed requestId, address indexed caller);
-
-    // ======================= ENUMS =======================
-    enum RequestType {
-        RECORD,
-        INDEX,
-        INDEX_CHANGE
-    }
+    event EncryptedSecretsUrlUpdated();
 
     // ======================= CONSTRUCTOR =======================
     constructor(address router)
         FunctionsClient(router)
         TNAccessControl(3 days, msg.sender)
     {}
+
+    // ========== PAUSE KEEPER FUNCTIONS ==========
+
+    /**
+     * @notice Pause the contract, disabling new requests
+     */
+    function pause() external onlyRole(PAUSE_KEEPER_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause the contract, enabling new requests
+     */
+    function unpause() external onlyRole(PAUSE_KEEPER_ROLE) {
+        _unpause();
+    }
 
     // ========== SOURCE KEEPER FUNCTIONS ==========
 
@@ -134,6 +146,26 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
         emit StalePeriodUpdated(newStalePeriod);
     }
 
+    // ========== SECRETS KEEPER FUNCTIONS ==========
+    /**
+     * @notice Set the encrypted secrets URL
+     * @param newEncryptedSecretsUrl The new encrypted secrets URL to set
+     */
+    function setEncryptedSecretsUrl(bytes calldata newEncryptedSecretsUrl)
+        external
+        onlyRole(SECRETS_KEEPER_ROLE)
+    {
+        // Optimization: short circuit if the length is the same
+        if (newEncryptedSecretsUrl.length == encryptedSecretsUrl.length) {
+            if (keccak256(newEncryptedSecretsUrl) == keccak256(encryptedSecretsUrl)) {
+                revert IdenticalEncryptedSecretsUrl();
+            }
+        }
+        encryptedSecretsUrl = newEncryptedSecretsUrl;
+        emit EncryptedSecretsUrlUpdated();
+    }
+
+    // ========== REQUEST FUNCTIONS ==========
     /**
      * @notice Send a simple request
      * @param encryptedSecretsUrls Encrypted URLs where to fetch user secrets
@@ -214,7 +246,7 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
         }
 
         // Get caller before deleting the request
-        address caller = req.caller;
+        address callerAddr = req.caller;
 
         // Delete request before external call
         delete pendingRequests[requestId];
@@ -233,66 +265,57 @@ abstract contract TNFunctionsClient is FunctionsClient, TNAccessControl, Reentra
             emit DecodedResponseError(requestId, string(err));
         }
 
-        // Make the callback to caller
-        try IOracleCallback(caller).receiveTNData(requestId, date, value, err) {
-            // Callback succeeded
-        } catch {
-            // Callback failed - we still consider the request fulfilled
-            // but we emit an event to log the failure
-            emit CallbackFailed(requestId, caller);
+        // Check if the caller is a contract before attempting callback
+        uint256 size;
+        assembly {
+            size := extcodesize(callerAddr)
+        }
+        
+        if (size > 0) {
+            try IOracleCallback(callerAddr).receiveTNData(requestId, date, value, err) {
+                // Callback succeeded
+            } catch {
+                // Callback failed - we still consider the request fulfilled
+                // but we emit an event to log the failure
+                emit CallbackFailed(requestId, callerAddr);
+            }
         }
     }
 
     /**
      * @notice Sends a Chainlink Functions request to fetch TN data
-     * @param requestType The type of data to fetch
+     * @param requestType The type of data to fetch (passed as uint8)
+     * @param decimalsMultiplier The multiplier for decimal precision
      * @param args Arguments for the request
-     * @param encryptedSecretsUrl The encrypted secrets URL to use
      * @return bytes32 The ID of the sent request
      */
     function requestTNData(
-        RequestType requestType,
+        uint8 requestType,
         uint8 decimalsMultiplier,
-        string[] memory args,
-        bytes memory encryptedSecretsUrl
-    ) internal virtual returns (bytes32) {
+        string[] memory args
+    ) public virtual returns (bytes32) {
         // we prepend the request type and decimals multiplier to the args
         string[] memory fnArgs = new string[](2 + args.length);
-        fnArgs[0] = requestTypeToString(requestType);
+        fnArgs[0] = Strings.toString(requestType);
         fnArgs[1] = Strings.toString(decimalsMultiplier);
+
+        // let's arbitrary limit the number of args to 20, just to be safe
+        if (args.length > 20) {
+            revert TooManyArgs(args.length);
+        }
 
         // copy the args
         for (uint8 i = 0; i < args.length; i++) {
             // start from 2 because we already prepended arguments
             fnArgs[2 + i] = args[i];
         }
-        bytes[] memory bytesArgs = new bytes[](0);
         bytes32 requestId = sendRequest(
             encryptedSecretsUrl,
             0, // no donHostedSecretsSlotID
             0, // no donHostedSecretsVersion
             fnArgs,
-            bytesArgs
+            new bytes[](0)
         );
         return requestId;
-    }
-
-    // ======================= UTILITY FUNCTIONS =======================
-
-    /**
-     * @dev Saves gas by converting a RequestType to a string, without using a library
-     *
-     * @notice Convert a RequestType to a string
-     * @param requestType The type of data to fetch
-     * @return string The string representation of the request type
-     */
-    function requestTypeToString(RequestType requestType) internal pure returns (string memory) {
-        if (requestType == RequestType.RECORD) {
-            return "0";
-        } else if (requestType == RequestType.INDEX) {
-            return "1";
-        } else {
-            return "2";
-        }
     }
 }

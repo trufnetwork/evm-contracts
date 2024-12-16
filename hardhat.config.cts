@@ -5,6 +5,7 @@ import { join } from "path";
 import { writeFile } from "fs/promises";
 import { TASK_COMPILE_SOLIDITY } from "hardhat/builtin-tasks/task-names";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "hardhat-switch-network";
 
 
 import './tasks'
@@ -55,12 +56,12 @@ const config = {
       viaIR: true
     }
   },
-  defaultNetwork: "localhost",
+  defaultNetwork: "hardhat",
   networks: {
     hardhat: {
       chainId: 31337
     },
-    localhost: {
+    chainlinkLocalhost: {
       url: "http://127.0.0.1:8545",
       chainId: 1337
     },

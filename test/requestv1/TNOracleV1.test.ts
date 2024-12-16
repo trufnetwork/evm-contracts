@@ -1,15 +1,25 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
-import { getSource } from "../../src/getSource";
-import { expectRevertedWithCustomError } from "../helpers/errors";
+import hre, { ethers } from "hardhat";
+import { getLoadableSource, getRemoteLoaderSource, getSource } from "../../src/getSource";
+import { expectNotToBeReverted, expectRevertedWithCustomError } from "../helpers/errors";
 import { deployFixture, type Fixture } from "../helpers/fixtures";
 import { TEST_CONSTANTS } from "../helpers/constants";
 import { setupForRequests } from "../helpers/setup";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { Location } from "@chainlink/functions-toolkit";
 
 describe("TNOracleV1", function () {
   let fixture: Fixture;
 
   this.timeout(30000);
+
+  this.beforeAll(async function () {
+    await hre.switchNetwork("chainlinkLocalhost");
+  });
+
+  this.afterAll(async function () {
+    await hre.switchNetwork(hre.config.defaultNetwork);
+  });
 
   beforeEach(async function () {
     fixture = await deployFixture(true);
@@ -58,6 +68,21 @@ describe("TNOracleV1", function () {
       const { tnOracle, nonAuthorized } = fixture;
       const err = await expect(tnOracle.connect(nonAuthorized).pause()).to
         .eventually.be.rejected;
+
+      expectRevertedWithCustomError(
+        err,
+        tnOracle,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("Should prevent non-source keeper from setting DON ID", async function () {
+      const { tnOracle, nonAuthorized, localFunctionsTestnet } = fixture;
+      const newDonId = ethers.encodeBytes32String(localFunctionsTestnet.donId);
+      
+      const err = await expect(
+        tnOracle.connect(nonAuthorized).setDonId(newDonId)
+      ).to.be.rejected;
 
       expectRevertedWithCustomError(
         err,
@@ -170,6 +195,31 @@ describe("TNOracleV1", function () {
 
       expect(await tnOracle.subscriptionId()).to.equal(subscriptionId);
     });
+
+    it("Should revert when setting the same DON ID twice", async function () {
+      const { tnOracle, sourceKeeper, localFunctionsTestnet } = fixture;
+      const newDonId = ethers.encodeBytes32String(localFunctionsTestnet.donId);
+      
+      await tnOracle.connect(sourceKeeper).setDonId(newDonId);
+
+      const err = await expect(
+        tnOracle.connect(sourceKeeper).setDonId(newDonId)
+      ).to.be.rejected;
+
+      expectRevertedWithCustomError(err, tnOracle, "IdenticalDonId");
+    });
+
+    it("Should revert when setting the same subscription ID twice", async function () {
+      const { tnOracle, sourceKeeper, subscriptionId } = fixture;
+      
+      await tnOracle.connect(sourceKeeper).setSubscriptionId(subscriptionId);
+
+      const err = await expect(
+        tnOracle.connect(sourceKeeper).setSubscriptionId(subscriptionId)
+      ).to.be.rejected;
+
+      expectRevertedWithCustomError(err, tnOracle, "IdenticalSubscriptionId");
+    });
   });
 
   describe("Request Functionality", function () {
@@ -251,6 +301,20 @@ describe("TNOracleV1", function () {
         "AccessControlUnauthorizedAccount"
       );
     });
+
+    it("Should emit RequestSent event with correct parameters", async function () {
+      const { tnOracle, reader } = fixture;
+      
+      await expect(
+        tnOracle
+          .connect(reader)
+          .requestRecord(18, TEST_CONSTANTS.PROVIDER, TEST_CONSTANTS.STREAM, TEST_CONSTANTS.DATE)
+      ).to.emit(tnOracle, "RequestSent")
+        .withArgs(
+          // The requestId will be dynamic, so we don't check it
+          anyValue, // requestId
+        );
+    });
   });
 
   describe("Callback Functionality", function () {
@@ -300,6 +364,8 @@ describe("TNOracleV1", function () {
 
 
     });
+
+    // url to test proxy: https://gist.githubusercontent.com/outerlook/5a9ceff88a669cf763ec0109a1bacd04/raw
 
     it("Should emit DataReceived event with correct values", async function () {
       const { mockConsumer } = fixture;
@@ -353,6 +419,85 @@ describe("TNOracleV1", function () {
       const lastError = await mockConsumer.lastError();
       const lastErrorString = ethers.toUtf8String(lastError);
       expect(lastErrorString).to.match(/Invalid Ethereum address format/);
+    });
+
+    it("Should successfully make a request and receive callback with result using proxy source", async function () {
+      const { mockConsumer, tnOracle, sourceKeeper } = fixture;
+
+      // Set the proxy source using the URL from the comment
+      const remoteCodeUrl = "https://gist.githubusercontent.com/outerlook/5a9ceff88a669cf763ec0109a1bacd04/raw";
+      
+      const {importStatements} = await getLoadableSource('requestv1');
+      const proxySource = getRemoteLoaderSource(remoteCodeUrl, importStatements);
+
+      // Use setSource with Location.Inline to set the proxy source on the contract
+      await tnOracle.connect(sourceKeeper).setSource(proxySource, Location.Inline);
+
+      // Make request through mock consumer
+      const tx = await mockConsumer.requestRecord(
+        18,
+        "0x4710a8d8f0d845da110086812a32de6d90d7ff5c",
+        "stfcfa66a7c2e9061a6fac8b32027ee8",
+        "2024-09-01"
+      );
+
+      const dataReceivedPromise = new Promise(resolve => mockConsumer.once(mockConsumer.filters.DataReceived(), (event) => resolve(event)));
+
+      // Wait for transaction
+      await tx.wait();
+      await dataReceivedPromise;
+
+      // Check the stored values in mock consumer
+      const lastRequestId = await mockConsumer.lastRequestId();
+      expect(lastRequestId).to.not.equal(ethers.ZeroHash);
+
+      const lastError = await mockConsumer.lastError();
+      const lastErrorString = ethers.toUtf8String(lastError);
+      expect(lastErrorString).to.equal("");
+
+      const lastDate = await mockConsumer.lastDate();
+      expect(lastDate).to.equal("2024-08-30");
+
+      const lastValue = await mockConsumer.lastValue();
+      expect(lastValue).to.equal(228750000000000000000n);
+    });
+  });
+
+  describe("Post-Configuration Checks", function () {
+    it("Reader can no longer make requests after READER_ROLE is revoked", async function () {
+      const { tnOracle, whitelistKeeper, reader } = fixture;
+      const READER_ROLE = await tnOracle.READER_ROLE();
+      
+      await tnOracle.connect(whitelistKeeper).revokeRole(READER_ROLE, reader.address);
+      
+      const err = await expect(
+        tnOracle
+          .connect(reader)
+          .requestRecord(18, TEST_CONSTANTS.PROVIDER, TEST_CONSTANTS.STREAM, TEST_CONSTANTS.DATE)
+      ).to.be.rejected;
+
+      expectRevertedWithCustomError(
+        err,
+        tnOracle,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("Should allow requests after updating DON ID and subscription ID", async function () {
+      const { tnOracle, sourceKeeper, reader, localFunctionsTestnet, subscriptionId } = fixture;
+      
+      // Update DON ID and subscription ID
+      const newDonId = ethers.encodeBytes32String(localFunctionsTestnet.donId);
+      await tnOracle.connect(sourceKeeper).setDonId(newDonId);
+      await tnOracle.connect(sourceKeeper).setSubscriptionId(subscriptionId);
+      await tnOracle.connect(sourceKeeper).setSource("return 1", Location.Inline);
+      
+      // Verify request still works
+      const requestPromise = tnOracle
+        .connect(reader)
+        .requestRecord(18, TEST_CONSTANTS.PROVIDER, TEST_CONSTANTS.STREAM, TEST_CONSTANTS.DATE);
+
+      await expectNotToBeReverted(requestPromise, tnOracle);
     });
   });
 });

@@ -1,15 +1,19 @@
-// This file exists for:
-// - Testing via Deno directly (faster iteration)
-// - Using as source for the Chainlink Functions SDK
+// NOTE: This file is designed to be executed as a Chainlink Function inline source or loaded remotely via our "remote loader" script.
+// But it may also be used as a standalone script, for testing purposes.
+// Before deployment, some parts of this file are changed to match expected environment.
+
 
 // -------- TEST SETUP --------
 //
 // This initial block sets up a similar environment to the one provided by `simulateScript`
 // and imports all necessary dependencies.
 
-import type { AxiosRequestConfig, AxiosInstance, AxiosResponse } from "npm:axios";
-import type { Decimal as DecimalType } from "npm:decimal.js-light@2.5.1"
-
+import type {
+  AxiosRequestConfig,
+  AxiosInstance,
+  AxiosResponse,
+} from "npm:axios";
+import type { Decimal as DecimalType } from "npm:decimal.js-light@2.5.1";
 
 // Arguments passed to this script
 // 0: getRecord, 1: getIndex, 2: getIndexChange
@@ -20,7 +24,7 @@ const getRecordTestArgs: string[] = [
   "0x4710a8d8f0d845da110086812a32de6d90d7ff5c",
   "stfcfa66a7c2e9061a6fac8b32027ee8",
   "2024-09-01",
-]
+];
 // args for getIndex: [requestType, decimalsMultiplier, dataProviderAddress, streamId, date, frozen_at, base_date]
 const getIndexTestArgs: string[] = [
   "1",
@@ -30,7 +34,7 @@ const getIndexTestArgs: string[] = [
   "2024-09-01",
   "",
   "",
-]
+];
 
 // args for getIndexChange: [requestType, decimalsMultiplier, dataProviderAddress, streamId, date, frozen_at, base_date, days_interval]
 const getIndexChangeTestArgs: string[] = [
@@ -42,16 +46,18 @@ const getIndexChangeTestArgs: string[] = [
   "",
   "",
   "365",
-]
+];
 
-const args = getRecordTestArgs
+const args = getRecordTestArgs;
 
 const secrets = {
-  PRIVATE_KEY: "VALID_KEY_PLACEHOLDER"
-}
+  PRIVATE_KEY: "VALID_KEY_PLACEHOLDER",
+};
 
-const { FunctionsModule } = await import("npm:@chainlink/functions-toolkit/dist/simulateScript/Functions.js");
-const Functions = new FunctionsModule().buildFunctionsmodule(10)
+const { FunctionsModule } = await import(
+  "npm:@chainlink/functions-toolkit/dist/simulateScript/Functions.js"
+);
+const Functions = new FunctionsModule().buildFunctionsmodule(10);
 
 // This divisor is important to split the code when parsed. Don't edit the message.
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
@@ -68,11 +74,15 @@ Deno.env.get = (prop) => {
 };
 
 // ---------- IMPORTS ----------
-const { NodeTNClient, StreamId, EthereumAddress } = await import("npm:@trufnetwork/sdk-js@0.2.1");
-const { ethers, Wallet } = await import("npm:ethers@6.10.0")
-const decimalPkg = await import("npm:decimal.js-light@2.5.1")
+const { NodeTNClient, StreamId, EthereumAddress } = await import(
+  "npm:@trufnetwork/sdk-js@0.2.1"
+);
+const { ethers, Wallet } = await import("npm:ethers@6.10.0");
+const decimalPkg = await import("npm:decimal.js-light@2.5.1");
 // workaround to keep typescript happy
-const { default: Decimal } = decimalPkg  as unknown as { default: typeof DecimalType }
+const { default: Decimal } = decimalPkg as unknown as {
+  default: typeof DecimalType;
+};
 const z = await import("npm:zod@3.22.4");
 
 // ---------- TYPES & ENUMS ----------
@@ -82,100 +92,144 @@ const z = await import("npm:zod@3.22.4");
 enum RequestType {
   RECORD = "0",
   INDEX = "1",
-  INDEX_CHANGE = "2"
+  INDEX_CHANGE = "2",
 }
 
-type BaseRequestArgs = [dataProviderAddress: string, decimalsMultiplier: string, streamId: string, date: string]
-type RecordRequestArgs = [RequestType.RECORD, ...BaseRequestArgs]
-type IndexRequestArgs = [RequestType.INDEX, ...BaseRequestArgs, frozen_at: string, base_date: string]
-type IndexChangeRequestArgs = [RequestType.INDEX_CHANGE, ...BaseRequestArgs, frozen_at: string, base_date: string, days_interval: string]
-type RequestArgs = RecordRequestArgs | IndexRequestArgs | IndexChangeRequestArgs
+type BaseRequestArgs = [
+  dataProviderAddress: string,
+  decimalsMultiplier: string,
+  streamId: string,
+  date: string,
+];
+type RecordRequestArgs = [RequestType.RECORD, ...BaseRequestArgs];
+type IndexRequestArgs = [
+  RequestType.INDEX,
+  ...BaseRequestArgs,
+  frozen_at: string,
+  base_date: string,
+];
+type IndexChangeRequestArgs = [
+  RequestType.INDEX_CHANGE,
+  ...BaseRequestArgs,
+  frozen_at: string,
+  base_date: string,
+  days_interval: string,
+];
+type RequestArgs =
+  | RecordRequestArgs
+  | IndexRequestArgs
+  | IndexChangeRequestArgs;
 
-type NonEmptyString = string & { _brand: "NonEmptyString" }
+type NonEmptyString = string & { _brand: "NonEmptyString" };
 
 interface BaseRequestArgsObject {
-  requestType: RequestType,
-  dataProviderAddress: NonEmptyString,
-  decimalsMultiplier: NonEmptyString,
-  streamId: NonEmptyString,
-  date: NonEmptyString
+  requestType: RequestType;
+  dataProviderAddress: NonEmptyString;
+  decimalsMultiplier: NonEmptyString;
+  streamId: NonEmptyString;
+  date: NonEmptyString;
 }
+
 interface RecordRequestArgsObject extends BaseRequestArgsObject {
-  requestType: RequestType.RECORD
+  requestType: RequestType.RECORD;
 }
+
 interface IndexRequestArgsObject extends BaseRequestArgsObject {
-  requestType: RequestType.INDEX,
-  frozen_at: number | null,
-  base_date: NonEmptyString | null
+  requestType: RequestType.INDEX;
+  frozen_at: number | null;
+  base_date: NonEmptyString | null;
 }
+
 interface IndexChangeRequestArgsObject extends BaseRequestArgsObject {
-  requestType: RequestType.INDEX_CHANGE,
-  frozen_at: number | null,
-  base_date: NonEmptyString | null,
-  days_interval: NonEmptyString
+  requestType: RequestType.INDEX_CHANGE;
+  frozen_at: number | null;
+  base_date: NonEmptyString | null;
+  days_interval: NonEmptyString;
 }
-type RequestArgsObject = RecordRequestArgsObject | IndexRequestArgsObject | IndexChangeRequestArgsObject
+
+type RequestArgsObject =
+  | RecordRequestArgsObject
+  | IndexRequestArgsObject
+  | IndexChangeRequestArgsObject;
 
 // Add schemas after the existing types & enums
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const ethereumAddressRegex = /^0x[a-fA-F0-9]{40}$/;
 
 // Base schema for common fields
-const baseArgsSchema = z.object({
-  requestType: z.enum(["0", "1", "2"]),
-  decimalsMultiplier: z.string()
-    .regex(/^\d+$/, "Must be a non-negative integer")
-    .transform(Number)
-    .refine(n => n >= 0 && n <= 100, "Decimals multiplier must be between 0 and 100"),
-  dataProviderAddress: z.string()
-    .regex(ethereumAddressRegex, "Invalid Ethereum address format"),
-  streamId: z.string()
-    .min(1, "Stream ID cannot be empty"),
-  date: z.string()
-    .regex(dateRegex, "Date must be in YYYY-MM-DD format")
-    .refine(date => !isNaN(new Date(date).getTime()), "Invalid date"),
-});
+const baseArgsSchema = z
+  .object({
+    requestType: z.enum(["0", "1", "2"]),
+    decimalsMultiplier: z
+      .string()
+      .regex(/^\d+$/, "Must be a non-negative integer")
+      .transform(Number)
+      .refine(
+        (n) => n >= 0 && n <= 100,
+        "Decimals multiplier must be between 0 and 100",
+      ),
+    dataProviderAddress: z
+      .string()
+      .regex(ethereumAddressRegex, "Invalid Ethereum address format"),
+    streamId: z.string().min(1, "Stream ID cannot be empty"),
+    date: z
+      .string()
+      .regex(dateRegex, "Date must be in YYYY-MM-DD format")
+      .refine((date) => !isNaN(new Date(date).getTime()), "Invalid date"),
+  })
+  .strict();
 
 // Record schema (type 0)
-const recordSchema = baseArgsSchema.extend({
-  requestType: z.literal("0"),
-}).strict();
+const recordSchema = baseArgsSchema
+  .extend({
+    requestType: z.literal("0"),
+  })
+  .strict();
 
 // Index schema (type 1)
-const indexSchema = baseArgsSchema.extend({
-  requestType: z.literal("1"),
-  frozen_at: z.string()
-    .regex(/^\d+$/, "frozen_at must be a positive integer (block height)")
-    .transform(Number)
-    .refine(n => n > 0, "frozen_at must be greater than 0")
-    .optional()
-    .nullable(),
-  base_date: z.string()
-    .regex(dateRegex, "base_date must be in YYYY-MM-DD format")
-    .refine(date => !isNaN(new Date(date).getTime()), "Invalid base_date")
-    .optional()
-    .nullable(),
-}).strict();
+const indexSchema = baseArgsSchema
+  .extend({
+    requestType: z.literal("1"),
+    frozen_at: z
+      .string()
+      .regex(/^\d+$/, "frozen_at must be a positive integer (block height)")
+      .transform(Number)
+      .refine((n) => n > 0, "frozen_at must be greater than 0")
+      .optional()
+      .nullable(),
+    base_date: z
+      .string()
+      .regex(dateRegex, "base_date must be in YYYY-MM-DD format")
+      .refine((date) => !isNaN(new Date(date).getTime()), "Invalid base_date")
+      .optional()
+      .nullable(),
+  })
+  .strict();
 
 // Index Change schema (type 2)
-const indexChangeSchema = baseArgsSchema.extend({
-  requestType: z.literal("2"),
-  frozen_at: z.string()
-    .regex(/^\d+$/, "frozen_at must be a positive integer (block height)")
-    .transform(Number)
-    .refine(n => n > 0, "frozen_at must be greater than 0")
-    .optional()
-    .nullable(),
-  base_date: z.string()
-    .regex(dateRegex, "base_date must be in YYYY-MM-DD format")
-    .refine(date => !isNaN(new Date(date).getTime()), "Invalid base_date")
-    .optional()
-    .nullable(),
-  days_interval: z.string()
-    .regex(/^\d+$/, "days_interval must be a positive integer")
-    .transform(Number)
-    .refine(n => n > 0, "days_interval must be greater than 0"),
-}).strict();
+const indexChangeSchema = baseArgsSchema
+  .extend({
+    requestType: z.literal("2"),
+    frozen_at: z
+      .string()
+      .regex(/^\d+$/, "frozen_at must be a positive integer (block height)")
+      .transform(Number)
+      .refine((n) => n > 0, "frozen_at must be greater than 0")
+      .optional()
+      .nullable(),
+    base_date: z
+      .string()
+      .regex(dateRegex, "base_date must be in YYYY-MM-DD format")
+      .refine((date) => !isNaN(new Date(date).getTime()), "Invalid base_date")
+      .optional()
+      .nullable(),
+    days_interval: z
+      .string()
+      .regex(/^\d+$/, "days_interval must be a positive integer")
+      .transform(Number)
+      .refine((n) => n > 0, "days_interval must be greater than 0"),
+  })
+  .strict();
 
 // Combined schema using discriminated union
 const argsSchema = z.discriminatedUnion("requestType", [
@@ -197,11 +251,20 @@ function numberOrNull(value: string | null): number | null {
  */
 function requestArgsToObject(args: string[]): RequestArgsObject {
   if (args.length < 5) {
-    throw new Error(`Insufficient arguments. Received ${args.length}, expected at least 5`);
+    throw new Error(
+      `Insufficient arguments. Received ${args.length}, expected at least 5`,
+    );
   }
 
-  const [requestType, decimalsMultiplier, dataProviderAddress, streamId, date, ...rest] = args;
-  
+  const [
+    requestType,
+    decimalsMultiplier,
+    dataProviderAddress,
+    streamId,
+    date,
+    ...rest
+  ] = args;
+
   // Prepare the input object based on request type
   const baseInput = {
     requestType,
@@ -238,48 +301,54 @@ function requestArgsToObject(args: string[]): RequestArgsObject {
   // Parse and validate using Zod
   const result = argsSchema.safeParse(input);
 
-  
   if (!result.success) {
     const formattedError = result.error.issues
-      .map(issue => `${issue.path.join('.')}: ${issue.message}`)
-      .join('\n');
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("\n");
     const ellipsis = formattedError.length > 100 ? "..." : "";
     // we need to truncate, otherwise it just comes empty at response
-    throw new Error(`Validation failed:\n${formattedError.slice(0, 100)}${ellipsis}`);
+    throw new Error(
+      `Validation failed:\n${formattedError.slice(0, 100)}${ellipsis}`,
+    );
   }
 
   // Convert the validated data back to the expected type
   const validated = result.data;
-  
+
   // Create base object with NonEmptyString types
   const baseObject = {
     dataProviderAddress: validated.dataProviderAddress as NonEmptyString,
-    decimalsMultiplier: validated.decimalsMultiplier.toString() as NonEmptyString,
+    decimalsMultiplier:
+      validated.decimalsMultiplier.toString() as NonEmptyString,
     streamId: validated.streamId as NonEmptyString,
     date: validated.date as NonEmptyString,
   };
-  
+
   switch (validated.requestType) {
     case "0":
       return {
         ...baseObject,
         requestType: RequestType.RECORD,
       };
-    
+
     case "1":
       return {
         ...baseObject,
         requestType: RequestType.INDEX,
         frozen_at: validated.frozen_at || null,
-        base_date: validated.base_date ? (validated.base_date as NonEmptyString) : null,
+        base_date: validated.base_date
+          ? (validated.base_date as NonEmptyString)
+          : null,
       };
-    
+
     case "2":
       return {
         ...baseObject,
         requestType: RequestType.INDEX_CHANGE,
         frozen_at: validated.frozen_at || null,
-        base_date: validated.base_date ? (validated.base_date as NonEmptyString) : null,
+        base_date: validated.base_date
+          ? (validated.base_date as NonEmptyString)
+          : null,
         days_interval: validated.days_interval.toString() as NonEmptyString,
       };
   }
@@ -293,7 +362,7 @@ const client = new NodeTNClient({
     address: signer.address,
     signer: signer,
   },
-  chainId: "truflation-staging-2024-11-22"
+  chainId: "truflation-staging-2024-11-22",
 });
 
 /**
@@ -301,38 +370,48 @@ const client = new NodeTNClient({
  * We use it to access a hidden axios instance in the SDK.
  */
 function getPrototypeAtDepth(obj: any, depth: number): any {
-  return depth === 0 ? obj : getPrototypeAtDepth(Object.getPrototypeOf(obj), depth - 1)
+  return depth === 0
+    ? obj
+    : getPrototypeAtDepth(Object.getPrototypeOf(obj), depth - 1);
 }
 
 // Access the internal axios instance
-const api = getPrototypeAtDepth(client['kwilClient'], 4)
-const originalRequest = api['request'];
+const api = getPrototypeAtDepth(client["kwilClient"], 4);
+const originalRequest = api["request"];
 
 /**
  * Custom adapter to use Chainlink Functions makeHttpRequest instead of direct Axios calls.
  */
 const customAdapter = async (config: AxiosRequestConfig) => {
-  const url = new URL(config.url ?? "", config.baseURL).toString()
+  const url = new URL(config.url ?? "", config.baseURL).toString();
   const headers = Object.fromEntries(
-    Object.entries(config.headers ?? {}).map(([key, value]) => [key, value.toString()])
-  ) as Record<string, string>
+    Object.entries(config.headers ?? {}).map(([key, value]) => [
+      key,
+      value.toString(),
+    ]),
+  ) as Record<string, string>;
 
   const response = await Functions.makeHttpRequest({
     url: url ?? "",
     data: JSON.parse(config.data || "{}"),
     headers,
-    method: config.method as 'get' | 'post' | 'put' | 'delete',
+    method: config.method as "get" | "post" | "put" | "delete",
     params: config.params,
-  })
+  });
 
-  return response.error ? Promise.reject(response) : response as unknown as AxiosResponse
-}
+  return response.error
+    ? Promise.reject(response)
+    : (response as unknown as AxiosResponse);
+};
 
 // Replace the original request function with a custom one that uses our custom adapter
-api['request'] = (...args: any[]) => {
-  const request: AxiosInstance = originalRequest.apply(client['kwilClient'], args);
-  request.defaults.adapter = customAdapter
-  return request
+api["request"] = (...args: any[]) => {
+  const request: AxiosInstance = originalRequest.apply(
+    client["kwilClient"],
+    args,
+  );
+  request.defaults.adapter = customAdapter;
+  return request;
 };
 
 // ---------- DATA FETCHING ----------
@@ -381,18 +460,16 @@ const argsObject = requestArgsToObject(args as RequestArgs);
 
 let results;
 try {
-  results = await getData(argsObject)
+  results = await getData(argsObject);
 } catch (e) {
-  throw new Error("Error fetching data: " + e)
+  throw new Error("Error fetching data: " + e);
 }
 
 // Validate we got exactly one record
 if (results.length != 1) {
-  throw new Error("Expected 1 record, got " + results.length)
+  throw new Error("Expected 1 record, got " + results.length);
 }
 const result = results[0];
-
-
 
 // Using decimal.js-light to scale the value
 const multiplierNum = Number(argsObject.decimalsMultiplier);
@@ -410,9 +487,12 @@ const scaledDecimal = decimalValue.mul(new Decimal(10).pow(multiplierNum));
 const scaledBigInt = BigInt(scaledDecimal.toFixed(0)); // toFixed(0) returns integer string
 
 // Encode result for the contract: (string, int256)
-const abiCoder = ethers.AbiCoder.defaultAbiCoder()
-const encoded = abiCoder.encode(["string", "int256"], [result.dateValue, scaledBigInt])
-const encodedResult = ethers.getBytes(encoded)
+const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+const encoded = abiCoder.encode(
+  ["string", "int256"],
+  [result.dateValue, scaledBigInt],
+);
+const encodedResult = ethers.getBytes(encoded);
 
 // once encodedResult is set, we're done. `return encodedResult;` will be appended to the end of the file.
 
@@ -422,7 +502,7 @@ const encodedResult = ethers.getBytes(encoded)
 //
 // Debugging/logging directly beyond this point.
 
-console.log({ encodedResult, decodedResult: encodedResult.toString() })
+console.log({ encodedResult, decodedResult: encodedResult.toString() });
 
-const decoded = abiCoder.decode(["string", "int256"], encodedResult)
-console.log({encodedResult, decoded})
+const decoded = abiCoder.decode(["string", "int256"], encodedResult);
+console.log({ encodedResult, decoded });
