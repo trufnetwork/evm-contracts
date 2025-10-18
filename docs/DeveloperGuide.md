@@ -64,6 +64,10 @@ Key differences from TNOracle:
 
 For custom implementations, we recommend reviewing the [Chainlink Functions documentation](https://docs.chain.link/chainlink-functions).
 
+### TrufAttestation Library
+
+Contracts that ingest signed attestations directly can import `contracts/attestation/TrufAttestation.sol` to parse payloads, verify validator signatures, and decode `(timestamp, value)` pairs. The [Attestation Library guide](AttestationLibrary.md) covers payload structure, usage patterns, and the TypeScript helpers exposed in `src/` for building canonical fixtures.
+
 ## Tasks Overview
 
 Our Hardhat tasks are organized into three main categories:
