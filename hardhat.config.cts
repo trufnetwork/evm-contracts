@@ -1,8 +1,8 @@
-process.env.BCRYPTO_FORCE_FALLBACK = process.env.BCRYPTO_FORCE_FALLBACK ?? "1";
+import "dotenv/config";
+process.env.BCRYPTO_FORCE_FALLBACK ??= "1";
 
 import { subtask } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import "dotenv/config";
 import { join } from "path";
 import { writeFile } from "fs/promises";
 import { TASK_COMPILE_SOLIDITY } from "hardhat/builtin-tasks/task-names";
