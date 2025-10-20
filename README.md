@@ -2,7 +2,7 @@
 
 ## Description
 
-This directory contains development tools to test and simulate Chainlink Functions. It also contains an example of a contract to test the functions.
+This directory contains development tools to test and simulate Chainlink Functions, an example consumer, and the Solidity attestation verification library used by TrufNetwork contracts.
 
 ## Requirements
 
@@ -78,3 +78,7 @@ See  [TNOracle Documentation](contracts/v1.0.0/TNOracle.md).
 -   Support
 
 Refer to the  [Developer Guide](docs/DeveloperGuide.md).
+
+#### Attestation Library
+
+Smart contracts that ingest signed attestations can import `contracts/attestation/TrufAttestation.sol` to parse payloads, recover signer addresses, and decode datapoints. Start with the [Attestation Library guide](docs/AttestationLibrary.md) for payload format, usage snippets, and TypeScript helpers that mirror the canonical encoder maintained in `github.com/trufnetwork/node` (`extensions/tn_attestation/canonical.go`).

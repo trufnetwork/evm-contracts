@@ -1,6 +1,8 @@
+import "dotenv/config";
+process.env.BCRYPTO_FORCE_FALLBACK ??= "1";
+
 import { subtask } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import "dotenv/config";
 import { join } from "path";
 import { writeFile } from "fs/promises";
 import { TASK_COMPILE_SOLIDITY } from "hardhat/builtin-tasks/task-names";
@@ -41,7 +43,7 @@ subtask(TASK_COMPILE_SOLIDITY).setAction(async (_, { config }, runSuper) => {
 });
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-
+const ETHEREUM_SEPOLIA_RPC_URL = process.env.ETHEREUM_SEPOLIA_RPC_URL;
 const ETHERSCAN_KEY = process.env.ETHERSCAN_API_KEY;
 
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -65,10 +67,12 @@ const config = {
       url: "http://127.0.0.1:8545",
       chainId: 1337
     },
-    sepolia: {
-      url: process.env.ETHEREUM_SEPOLIA_RPC_URL,
-      accounts: [PRIVATE_KEY],
-    },
+    ...(ETHEREUM_SEPOLIA_RPC_URL && {
+      sepolia: {
+        url: ETHEREUM_SEPOLIA_RPC_URL,
+        accounts: PRIVATE_KEY ? [PRIVATE_KEY] : undefined,
+      },
+    }),
   },
   etherscan: {
     apiKey: ETHERSCAN_KEY,
