@@ -4,7 +4,8 @@
   "private": true,
   "description": "Truf Network EVM contracts",
   "scripts": {
-    "run:direct": "deno run --no-prompt --allow-net deno-src/source.ts"
+    "run:direct": "deno run --no-prompt --allow-net deno-src/source.ts",
+    "test": "hardhat test test/attestation/TrufAttestation.test.ts test/attestation/TrufAttestationConsumer.test.ts"
   },
   "dependencies": {
     "@chainlink/functions-toolkit": "0.3.2",
