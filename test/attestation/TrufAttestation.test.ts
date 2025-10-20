@@ -1,38 +1,12 @@
-import fs from "fs";
-import path from "path";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { buildCanonical, buildPayload, CanonicalFields } from "../helpers/attestation";
+import { GOLDEN_CANONICAL, GOLDEN_PAYLOAD, GOLDEN_SIGNATURE, goldenFixture } from "./golden";
 
-const goldenPath = path.resolve(
-  __dirname,
-  "./fixtures/attestation_golden.json",
-);
-const goldenFixture = JSON.parse(fs.readFileSync(goldenPath, "utf8")) as {
-  canonical_hex: string;
-  signature_hex: string;
-  payload_hex: string;
-  data_provider: string;
-  stream_id: string;
-  block_height: number;
-  action_id: number;
-  args: {
-    data_provider: string;
-    stream_id: string;
-    start_time: number;
-    end_time: number;
-    pending_filter: null | string;
-    use_cache: boolean;
-  };
-  result: {
-    timestamps: number[];
-    values: string[];
-  };
-};
-
-const GOLDEN_CANONICAL = `0x${goldenFixture.canonical_hex}`;
-const GOLDEN_SIGNATURE = `0x${goldenFixture.signature_hex}`;
-const GOLDEN_PAYLOAD = `0x${goldenFixture.payload_hex}`;
+async function deployHarness() {
+  const factory = await ethers.getContractFactory("TrufAttestationHarness");
+  return factory.deploy();
+}
 
 describe("TrufAttestation library", function () {
   it("parses, hashes, verifies, and decodes data points", async function () {
@@ -105,7 +79,7 @@ describe("TrufAttestation library", function () {
   });
 
   it("parses attestation payload from the golden fixture", async function () {
-    const harness = await (await ethers.getContractFactory("TrufAttestationHarness")).deploy();
+    const harness = await deployHarness();
 
     const payload = GOLDEN_PAYLOAD;
     const parsed = await harness.parse(payload);
@@ -186,5 +160,71 @@ describe("TrufAttestation library", function () {
       harness,
       "AttestationInvalidAlgorithm"
     );
+  });
+
+  it("rejects payloads with truncated canonical bytes", async function () {
+    const harness = await deployHarness();
+    const truncated = GOLDEN_PAYLOAD.slice(0, GOLDEN_PAYLOAD.length - 130);
+    await expect(harness.parse(truncated)).to.be.revertedWithCustomError(harness, "AttestationInvalidLength");
+  });
+
+  it("rejects payloads with truncated signature bytes", async function () {
+    const harness = await deployHarness();
+    const canonical = Buffer.from(goldenFixture.canonical_hex, "hex");
+    const signature = Buffer.from(goldenFixture.signature_hex, "hex").slice(0, 64);
+    const truncatedPayload = ethers.hexlify(Buffer.concat([canonical, signature]));
+    await expect(harness.parse(truncatedPayload)).to.be.revertedWithCustomError(
+      harness,
+      "AttestationInvalidLength"
+    );
+  });
+
+  it("returns false when signature or canonical bytes are tampered", async function () {
+    const harness = await deployHarness();
+
+    const expectedValidator = ethers.getAddress(goldenFixture.data_provider);
+    expect(await harness.verify(GOLDEN_PAYLOAD, expectedValidator)).to.equal(true);
+
+    const tamperedCanonical = ethers.getBytes(GOLDEN_PAYLOAD);
+    tamperedCanonical[5] ^= 0xff;
+    expect(await harness.verify(ethers.hexlify(tamperedCanonical), expectedValidator)).to.equal(false);
+  });
+
+  it("decodes datapoints for varying array sizes", async function () {
+    const harness = await deployHarness();
+    const signingWallet = ethers.Wallet.createRandom();
+    const [, other] = await ethers.getSigners();
+
+    for (const size of [0, 1, 5, 10]) {
+      const timestamps = Array.from({ length: size }, (_, i) => BigInt(i + 1));
+      const values = Array.from({ length: size }, (_, i) => BigInt(i));
+      const encoded = ethers.AbiCoder.defaultAbiCoder().encode(["uint256[]", "int256[]"], [timestamps, values]);
+
+      const fields: CanonicalFields = {
+        version: 1,
+        algorithm: 0,
+        blockHeight: BigInt(200 + size),
+        dataProvider: signingWallet.address,
+        streamId: ethers.hexlify(ethers.randomBytes(32)),
+        actionId: 1,
+        args: ethers.getBytes("0x"),
+        result: ethers.getBytes(encoded),
+      };
+
+      const canonical = buildCanonical(fields);
+      const digest = ethers.sha256(canonical);
+      const signature = ethers.Signature.from(signingWallet.signingKey.sign(ethers.getBytes(digest))).serialized;
+      const payload = buildPayload(fields, ethers.getBytes(signature));
+
+      const decoded = await harness.decodeDataPoints(payload);
+      expect(decoded.length).to.equal(size);
+      if (size > 0) {
+        expect(decoded[0].timestamp).to.equal(timestamps[0]);
+        expect(decoded[size - 1].value).to.equal(values[size - 1]);
+      }
+
+      expect(await harness.verify(payload, signingWallet.address)).to.equal(true);
+      expect(await harness.verify(payload, other.address)).to.equal(false);
+    }
   });
 });

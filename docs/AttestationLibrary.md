@@ -60,3 +60,8 @@ They mirror the canonical encoder maintained in the TrufNetwork node repo (`gith
 - Track digests/block heights to enforce replay and freshness policies.
 - Aggregate multiple attestations (median/quorum) in downstream contracts if required.
 - Surface verification failures in logs/metrics instead of swallowing them silently.
+
+## Example Contract
+- A minimal, non-production example lives at `contracts/attestation/TrufAttestationConsumer.sol`. It keeps a single owner-set leader and shows how to persist the latest datapoint.
+- The accompanying test suite (`test/attestation/TrufAttestationConsumer.test.ts`) demonstrates end-to-end verification using the golden fixture.
+- Replace the leader management with your own governance/allowlist logic before shipping to mainnet.
