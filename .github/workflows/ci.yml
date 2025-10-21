@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false || github.event.pull_request == null
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node.js (act)
+        if: env.ACT == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Node.js
+        if: env.ACT != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: '**/pnpm-lock.yaml'
+
+      - name: Install dependencies (act)
+        if: env.ACT == 'true'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install dependencies
+        if: env.ACT != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile contracts
+        run: pnpm hardhat compile
+        env:
+          SKIP_HARDHAT_TASKS: "true"
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Test
+        run: pnpm test
+        env:
+          SKIP_HARDHAT_TASKS: "true"

@@ -6,13 +6,27 @@ import { getEnv } from "../helpers/environment";
 
 describe("Off-Chain Logic Simulation", function () {
   // Test setup
-  const dataProviderAddress = "0x4710a8d8f0d845da110086812a32de6d90d7ff5c";
-  const streamId = "stfcfa66a7c2e9061a6fac8b32027ee8";
-  const secrets = {
-    PRIVATE_KEY: getEnv("TN_READER_PRIVATE_KEY")
+  let dataProviderAddress: string;
+  let streamId: string;
+  let secrets: {
+    PRIVATE_KEY: string;
   };
-  const source = getSource("requestv1");
-  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+  let source: string;
+  let abiCoder: ethers.AbiCoder;
+
+  before(async function () {
+    if (process.env.CI) {
+      this.skip();
+    }
+    
+    dataProviderAddress = "0x4710a8d8f0d845da110086812a32de6d90d7ff5c";
+    streamId = "stfcfa66a7c2e9061a6fac8b32027ee8";
+    secrets = {
+      PRIVATE_KEY: getEnv("TN_READER_PRIVATE_KEY")
+    };
+    source = getSource("requestv1");
+    abiCoder = ethers.AbiCoder.defaultAbiCoder();
+  });
 
   // Helper function to simulate
   async function simulate(args: string[]) {

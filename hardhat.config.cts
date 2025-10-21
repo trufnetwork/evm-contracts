@@ -10,7 +10,9 @@ import "@nomicfoundation/hardhat-chai-matchers";
 import "hardhat-switch-network";
 
 
-import './tasks'
+if (process.env.SKIP_HARDHAT_TASKS !== "true") {
+  require("./tasks");
+}
 
 subtask(TASK_COMPILE_SOLIDITY).setAction(async (_, { config }, runSuper) => {
   const superRes = await runSuper();
@@ -20,17 +22,6 @@ subtask(TASK_COMPILE_SOLIDITY).setAction(async (_, { config }, runSuper) => {
       join(config.paths.artifacts, "package.json"),
       '{ "type": "commonjs" }'
     );
-  } catch (error) {
-    console.error("Error writing package.json: ", error);
-  }
-
-  return superRes;
-});
-
-subtask(TASK_COMPILE_SOLIDITY).setAction(async (_, { config }, runSuper) => {
-  const superRes = await runSuper();
-
-  try {
     await writeFile(
       join(config.paths.root, "typechain-types", "package.json"),
       '{ "type": "commonjs" }'

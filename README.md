@@ -1,8 +1,54 @@
-# Chainlink Functions - TN
+# @trufnetwork/evm-contracts
 
-## Description
+Solidity helpers and supporting TypeScript utilities for verifying TrufNetwork attestations. The package is published on npm as [`@trufnetwork/evm-contracts`](https://www.npmjs.com/package/@trufnetwork/evm-contracts).
 
-This directory contains development tools to test and simulate Chainlink Functions, an example consumer, and the Solidity attestation verification library used by TrufNetwork contracts.
+## Installation
+
+```bash
+pnpm add @trufnetwork/evm-contracts
+```
+
+or with npm:
+
+```bash
+npm install @trufnetwork/evm-contracts
+```
+
+## Solidity Usage
+
+```solidity
+import {TrufAttestation} from "@trufnetwork/evm-contracts/contracts/attestation/TrufAttestation.sol";
+
+contract Consumer {
+    using TrufAttestation for bytes;
+
+    function verify(bytes calldata payload, address validator) external view returns (bool) {
+        TrufAttestation.Attestation memory att = payload.parse();
+        return att.verify(validator);
+    }
+}
+```
+
+For a more complete example (including leader management), see the reference contract linked in the [Attestation Library guide](docs/AttestationLibrary.md).
+
+## TypeScript Helpers
+
+The package also exports helpers for building canonical payloads in tests or off-chain tooling:
+
+```ts
+import { buildCanonicalAttestation, buildSignedAttestation } from "@trufnetwork/evm-contracts";
+
+const canonical = buildCanonicalAttestation(fields);
+const payload = buildSignedAttestation(fields, signatureBytes);
+```
+
+Refer to `docs/AttestationLibrary.md` for details on the field layout and helper APIs.
+
+---
+
+# Chainlink Functions Toolkit
+
+The repository still contains development tooling for Chainlink Functions and legacy oracle flows. The sections below cover the existing setup.
 
 ## Requirements
 
