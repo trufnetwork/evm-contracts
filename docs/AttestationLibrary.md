@@ -1,6 +1,6 @@
 # Attestation Library
 
-The `contracts/attestation/TrufAttestation.sol` library lets Solidity contracts verify TrufNetwork attestations on-chain. Phase 1 keeps the scope small: single secp256k1 signer, canonical payload parsing, and caller-managed safeguards.
+The `contracts/attestation/TrufAttestation.sol` library lets Solidity contracts verify TrufNetwork attestations on-chain. Install it with `pnpm add @trufnetwork/evm-contracts`. The implementation focuses on single secp256k1 signatures, canonical payload parsing, and caller-managed safeguards.
 
 ## When to Use It
 - You receive the nine-field payload returned by `get_signed_attestation`.
@@ -51,7 +51,7 @@ When crafting fixtures or unit tests, reuse the exported builders:
 import {
   buildCanonicalAttestation,
   buildSignedAttestation,
-} from "@trufnetwork/evm-contracts/src";
+} from "@trufnetwork/evm-contracts";
 ```
 They mirror the canonical encoder maintained in the TrufNetwork node repo (`github.com/trufnetwork/node`, file `extensions/tn_attestation/canonical.go`) and power the Hardhat tests in `test/attestation/TrufAttestation.test.ts`.
 
@@ -62,6 +62,6 @@ They mirror the canonical encoder maintained in the TrufNetwork node repo (`gith
 - Surface verification failures in logs/metrics instead of swallowing them silently.
 
 ## Example Contract
-- A minimal, non-production example lives at `contracts/attestation/TrufAttestationConsumer.sol`. It keeps a single owner-set leader and shows how to persist the latest datapoint.
+- A minimal, non-production example lives in the repository at `contracts/attestation/TrufAttestationConsumer.sol`. It keeps a single owner-set leader and shows how to persist the latest datapoint.
 - The accompanying test suite (`test/attestation/TrufAttestationConsumer.test.ts`) demonstrates end-to-end verification using the golden fixture.
 - Replace the leader management with your own governance/allowlist logic before shipping to mainnet.

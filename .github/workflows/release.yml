@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g., v0.1.0-beta). Auto-increment patch if omitted."
+        required: false
+        default: ""
+      dist_tag:
+        description: "npm dist-tag (e.g., latest, beta)."
+        required: false
+        default: "beta"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compute version
+        id: version
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LATEST=$(git tag -l 'v*' | sort --version-sort | tail -n 1)
+          if [ -z "$LATEST" ]; then
+            NEXT="v0.1.0-beta"
+          else
+            BASE=${LATEST#v}
+            NEXT="v$(npx --yes semver -i patch "$BASE")"
+          fi
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Update package version
+        run: pnpm version $(echo ${{ steps.version.outputs.version }} | sed 's/^v//') --no-git-tag-version
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: pnpm publish --tag ${{ github.event.inputs.dist_tag }} --access public --no-git-checks
+
+      - name: Create git tag
+        run: |
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.version.outputs.version }} \
+            --title ${{ steps.version.outputs.version }} \
+            --generate-notes
