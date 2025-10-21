@@ -11,7 +11,6 @@ gitignore
 node_modules
 
 # we want to keep it flexible for different package managers
-pnpm-lock.yaml
 yarn.lock
 deno.lock
 package-lock.json
@@ -42,4 +41,3 @@ build/
 # Debug logs
 debug/
 logs/
-
