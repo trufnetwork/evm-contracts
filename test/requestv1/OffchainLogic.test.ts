@@ -5,11 +5,6 @@ import { getSource } from "../../src/getSource";
 import { getEnv } from "../helpers/environment";
 
 describe("Off-Chain Logic Simulation", function () {
-  before(async function () {
-    if (process.env.CI) {
-      this.skip();
-    }
-  });
   // Test setup
   let dataProviderAddress: string;
   let streamId: string;
@@ -19,9 +14,11 @@ describe("Off-Chain Logic Simulation", function () {
   let source: string;
   let abiCoder: ethers.AbiCoder;
 
-
-
   before(async function () {
+    if (process.env.CI) {
+      this.skip();
+    }
+    
     dataProviderAddress = "0x4710a8d8f0d845da110086812a32de6d90d7ff5c";
     streamId = "stfcfa66a7c2e9061a6fac8b32027ee8";
     secrets = {
