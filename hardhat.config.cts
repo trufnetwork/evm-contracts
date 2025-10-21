@@ -10,7 +10,9 @@ import "@nomicfoundation/hardhat-chai-matchers";
 import "hardhat-switch-network";
 
 
-import './tasks'
+if (process.env.SKIP_HARDHAT_TASKS !== "true") {
+  require("./tasks");
+}
 
 subtask(TASK_COMPILE_SOLIDITY).setAction(async (_, { config }, runSuper) => {
   const superRes = await runSuper();

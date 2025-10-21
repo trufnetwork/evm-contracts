@@ -13,7 +13,7 @@
     "clean": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "pnpm run build",
-    "test": "hardhat test test/attestation/TrufAttestation.test.ts test/attestation/TrufAttestationConsumer.test.ts"
+  "test": "hardhat test test/attestation/TrufAttestation.test.ts test/attestation/TrufAttestationConsumer.test.ts"
   },
   "dependencies": {
     "@chainlink/functions-toolkit": "0.3.2",
@@ -33,14 +33,14 @@
     "@types/chai": "^4.3.0",
     "@types/chai-as-promised": "7.1.2",
     "@types/inquirer": "^9.0.7",
-    "@types/mocha": "^9.1.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "20.11.18",
     "chai": "4.3.7",
     "chai-as-promised": "7.1.2",
     "dotenv": "16.4.5",
     "hardhat": "2.22.16",
     "hardhat-switch-network": "1.1.1",
-    "mocha": "11.0.1",
+    "mocha": "^11.7.4",
     "prettier": "^3.3.3",
     "semver": "^7.7.3",
     "solidity-coverage": "^0.8.0",
