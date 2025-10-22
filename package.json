@@ -65,7 +65,8 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./contracts/attestation/TrufAttestation.sol": "./contracts/attestation/TrufAttestation.sol"
   },
   "publishConfig": {
     "access": "public"
